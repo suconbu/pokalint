@@ -63,14 +63,14 @@ def load_setting(path):
         setting[key] = patterns
     return setting
 
-def inspect_line(context, line, setting, result):
+def inspect_line(context, line, setting, report):
     for key in setting:
         for pattern in setting[key]:
             position = pattern.match(line)
             if position:
-                result[key].append(Entry(context.filename, context.lineno, position[0], position[1], line.replace("\t", " ")))
+                report[key].append(Entry(context.filename, context.lineno, position[0], position[1], line.replace("\t", " ")))
 
-def inspect_lines(lines, setting, result):
+def inspect_lines(lines, setting, report):
     context = Context()
     filename_pattern = re.compile(r"^\+\+\+ b/(.+)$")
     lineno_pattern = re.compile(r"^@@ -\d+,\d+ \+(\d+),\d+ @@")
@@ -81,25 +81,25 @@ def inspect_lines(lines, setting, result):
             context.lineno = int(lineno_pattern.match(line).group(1))
         else:
             if line.startswith("+"):
-                inspect_line(context, line[1:].rstrip("\n"), setting, result)
+                inspect_line(context, line[1:].rstrip("\n"), setting, report)
             context.lineno += 1
 
-def new_result(setting):
-    result = {}
+def new_report(setting):
+    report = {}
     for key in setting:
-        result[key] = []
-    return result
+        report[key] = []
+    return report
 
-def output_result(result):
-    for key in result:
-        count = len(result[key])
+def output_report(report):
+    for key in report:
+        count = len(report[key])
         message = "# " + key + " - "
         if count == 0:
             print(concolor.green(message + "OK"))
         else:
             print(concolor.red(message + "NOK:" + str(count)))
         print()
-        for entry in result[key]:
+        for entry in report[key]:
             print("{0}:{1}".format(entry.filename, entry.lineno))
             print(entry.text)
             width_start = get_string_width(entry.text[:entry.start])
@@ -114,9 +114,9 @@ def main(argv):
         setting_file = os.path.join(os.path.dirname(__file__), "pokalint_setting.json")
     setting = load_setting(setting_file)
     
-    result = new_result(setting)
-    inspect_lines(sys.stdin.readlines(), setting, result)
-    output_result(result)
+    report = new_report(setting)
+    inspect_lines(sys.stdin.readlines(), setting, report)
+    output_report(report)
 
 if __name__ == "__main__":
     main(sys.argv)
