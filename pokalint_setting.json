@@ -1,0 +1,28 @@
+{
+	"Deprecated":[
+		"/\\bstrcpy\\b/",
+		"/\\bstrcmp\\b/",
+		"/\\bato\\w{1,2}\\b/",
+		"/=\\s*{\\s*0\\s*}/"
+	],
+	"Typo":[
+		"convart",
+		"fromat",
+		"chagne",
+		"serch",
+		"chack",
+		"cash"
+	],
+	"Temporary":[
+		"zantei",
+		"暫定",
+		"とりあえず"
+	],
+	"DebugCode":[
+		"@test",
+		"@debug"
+	],
+	"Todo":[
+		"/\\btodo\\b/i"
+	]
+}
