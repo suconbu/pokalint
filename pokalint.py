@@ -4,6 +4,7 @@ import os
 import sys
 import re
 import json
+import unicodedata
 
 class Context(object):
     def __init__(self):
@@ -50,6 +51,13 @@ class Color(object):
         return "\033[32m" + s + "\033[0m"
     def red(s):
         return "\033[31m" + s + "\033[0m"
+
+def get_string_width(s):
+    sw = 0
+    for c in s:
+        cw = unicodedata.east_asian_width(c)
+        sw += 2 if (cw == 'F' or cw == 'W' or cw == "A") else 1
+    return sw
 
 def load_setting(path):
     setting = json.load(open(path))
@@ -99,7 +107,9 @@ def output_result(result):
         for entry in result[key]:
             print("{0}:{1}".format(entry.filename, entry.lineno))
             print(entry.text)
-            print(" " * entry.start + "^" * (entry.end - entry.start))
+            width_start = get_string_width(entry.text[:entry.start])
+            width_match = get_string_width(entry.text[entry.start:entry.end])
+            print(" " * width_start + "^" * width_match)
             print()
 
 def main(argv):
