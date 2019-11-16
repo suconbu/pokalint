@@ -4,6 +4,7 @@ import os
 import sys
 import re
 import json
+import concolor
 import unicodedata
 
 class Context(object):
@@ -45,12 +46,6 @@ class Entry(object):
         self.start = start
         self.end = end
         self.text = text
-
-class Color(object):
-    def green(s):
-        return "\033[32m" + s + "\033[0m"
-    def red(s):
-        return "\033[31m" + s + "\033[0m"
 
 def get_string_width(s):
     sw = 0
@@ -100,9 +95,9 @@ def output_result(result):
         count = len(result[key])
         message = "# " + key + " - "
         if count == 0:
-            print(Color.green(message + "OK"))
+            print(concolor.green(message + "OK"))
         else:
-            print(Color.red(message + "NOK:" + str(count)))
+            print(concolor.red(message + "NOK:" + str(count)))
         print()
         for entry in result[key]:
             print("{0}:{1}".format(entry.filename, entry.lineno))
