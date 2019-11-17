@@ -57,14 +57,15 @@ class Inspecter(object):
         for line in lines:
             if line.startswith("+++"):
                 self.current_filename = filename_pattern.match(line).group(1)
+                self.report.change_file_count += 1
             elif line.startswith("@@"):
                 self.current_lineno = int(lineno_pattern.match(line).group(1))
             else:
                 if line.startswith("+"):
                     self.__inspect_line(line[1:].rstrip("\n"))
-                    self.report.total_add += 1
+                    self.report.add_line_count += 1
                 elif line.startswith("-"):
-                    self.report.total_remove += 1
+                    self.report.remove_line_count += 1
                 self.current_lineno += 1
         return self.report
 
@@ -87,8 +88,9 @@ class Report(object):
         self.entries_by_category = {}
         for category in categories:
             self.entries_by_category[category] = []
-        self.total_add = 0
-        self.total_remove = 0
+        self.change_file_count = 0
+        self.add_line_count = 0
+        self.remove_line_count = 0
 
     def add_entry(self, category, entry):
         self.entries_by_category[category].append(entry)
@@ -119,6 +121,18 @@ class Report(object):
     def output_summary(self):
         print("# SUMMARY")
         print()
+        self.output_statistics()
+        self.output_inspection()
+
+    def output_statistics(self):
+        print("## Statistics")
+        print()
+        print("* Change       - {0:5} files".format(self.change_file_count))
+        print("* Total add    - {0:5} lines".format(self.add_line_count))
+        print("* Total remove - {0:5} lines".format(self.remove_line_count))
+        print()
+
+    def output_inspection(self):
         print("## Inspection")
         print()
         max_width = len_on_screen(max(self.entries_by_category, key = lambda entry : len(entry)))
