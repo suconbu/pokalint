@@ -1,31 +1,33 @@
 {
-	"Deprecated":[
-		"/\\bstrcpy\\b/",
-		"/\\bstrcmp\\b/",
-		"/\\bato\\w{1,2}\\b/",
-		"/=\\s*{\\s*0\\s*}/"
-	],
-	"Typo":[
-		"convart",
-		"fromat",
-		"chagne",
-		"serch",
-		"chack",
-		"cash"
-	],
-	"Temporary":[
-		"zantei",
-		"暫定",
-		"とりあえず"
-	],
-	"DebugCode":[
-		"@test",
-		"@debug"
-	],
-	"Todo":[
-		"/\\btodo\\b/i"
-	],
-	"全角空白":[
-		"　"
-	]
+	"inspect":{
+		"Deprecated":[
+			{"pattern":"/\\bstrcpy\\b/", "message":"{0} は時代遅れです。strcpy_s の使用を推奨します。"},
+			{"pattern":"/\\bstrcmp\\b/", "message":"{0} は時代遅れです。strcmp_s の使用を推奨します。"},
+			{"pattern":"/\\bato\\w{1,2}\\b/", "message":"{0} は時代遅れです。strtol とかの使用を推奨します。"},
+			{"pattern":"/=\\s*{\\s*0\\s*}/", "message":"配列/構造体のゼロ初期化には = {} の使用を推奨します。"}
+		],
+		"Typo":[
+			"convart",
+			"fromat",
+			"chagne",
+			"serch",
+			"chack",
+			"cash"
+		],
+		"Temporary":[
+			"zantei",
+			"暫定",
+			"とりあえず"
+		],
+		"DebugCode":[
+			"@test",
+			"@debug"
+		],
+		"Todo":[
+			"/\\btodo\\b/i"
+		],
+		"全角空白":[
+			"　"
+		]
+	}
 }

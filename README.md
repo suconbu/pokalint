@@ -39,14 +39,29 @@ The setting file supports JSON format.
 
 ## Format
 
-```json
+```c
 {
-    "{category-name}" : [
-        "{text-pattern}",
-        "/{regex-pattern}/",
-        "/{regex-pattern}/i"  // Ignore case
-    ],
-    :
+    "inspect" : {
+        "{category-name}" : [
+
+            // Format 1
+            // In {pattern} can specify text or regular-expression.
+            // - "{text-pattern}",
+            // - "/{regex-pattern}/",
+            // - "/{regex-pattern}/i"  // Ignore case
+            "{pattern}",
+
+            // Format 2
+            // {message} is output at inspection
+            {
+                "pattern" : "{pattern}",
+                "message" : "{message}"
+            },
+
+            :
+        ],
+        :
+    }
 }
 ```
 * "\\" In regular expressions must be escaped. (e.g. "/\\\\w+_\\\\d+/")

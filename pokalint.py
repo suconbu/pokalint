@@ -16,7 +16,13 @@ def len_on_screen(s):
 
 class Pattern(object):
     def __init__(self, pattern):
-        match = re.match(r"/(.*)/(\w)?", pattern)
+        if type(pattern) is str:
+            pattern_string = pattern
+            message = None
+        else:
+            pattern_string = pattern["pattern"]
+            message = pattern["message"]
+        match = re.match(r"/(.*)/(\w)?", pattern_string)
         if match:
             flags = 0
             if match.group(2) and "i" in match.group(2):
@@ -24,8 +30,9 @@ class Pattern(object):
             self.pattern = re.compile(match.group(1), flags)
             self.regex = True
         else:
-            self.pattern = pattern
+            self.pattern = pattern_string
             self.regex = False
+        self.message = message
 
     def match(self, s):
         position = None
@@ -39,19 +46,22 @@ class Pattern(object):
                 position = (index, index + len(self.pattern))
         return position
 
-class Inspecter(object):
+class Inspector(object):
     def __init__(self, setting_path):
-        self.patterns_by_category = {}
-        setting_json = json.load(open(setting_path))
-        self.categories = setting_json.keys()
-        for category in self.categories:
-            self.patterns_by_category[category] = list(map(lambda p: Pattern(p), setting_json[category]))
+        setting_root = json.load(open(setting_path))
+        self.inspect_patterns_by_category = self.__get_patterns_from_setting(setting_root["inspect"])
         self.current_filename = ""
         self.current_lineno = 0
         self.report = None
 
+    def __get_patterns_from_setting(self, setting_group):
+        patterns = {}
+        for category in setting_group.keys():
+            patterns[category] = list(map(lambda p: Pattern(p), setting_group[category]))
+        return patterns
+
     def inspect(self, lines):
-        self.report = Report(self.categories)
+        self.report = Report(self.inspect_patterns_by_category.keys())
         filename_pattern = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
         lineno_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
@@ -89,8 +99,8 @@ class Inspecter(object):
         return self.report
 
     def __inspect_line(self, line):
-        for category in self.categories:
-            for pattern in self.patterns_by_category[category]:
+        for category in self.inspect_patterns_by_category:
+            for pattern in self.inspect_patterns_by_category[category]:
                 position = pattern.match(line)
                 if position:
                     entry = Entry()
@@ -99,11 +109,11 @@ class Inspecter(object):
                     entry.start = position[0]
                     entry.end = position[1]
                     entry.text = line.replace("\t", " ")
+                    entry.pattern = pattern
                     self.report.add_entry(category, entry)
 
 class Report(object):
     def __init__(self, categories):
-        self.categories = categories
         self.entries_by_category = {}
         for category in categories:
             self.entries_by_category[category] = []
@@ -121,7 +131,7 @@ class Report(object):
         self.output_summary()
 
     def output_detail(self):
-        for category in self.categories:
+        for category in self.entries_by_category:
             entries = self.entries_by_category[category]
             count = len(entries)
             s = "# {0} - {1}".format(category, count)
@@ -136,6 +146,9 @@ class Report(object):
                 width_start = len_on_screen(entry.text[:entry.start])
                 width_match = len_on_screen(entry.text[entry.start:entry.end])
                 print(" " * width_start + "^" * width_match)
+                if entry.pattern.message:
+                    match_word = entry.text[entry.start:entry.end]
+                    print(entry.pattern.message.replace("{0}", match_word))
                 print()
 
     def output_summary(self):
@@ -158,7 +171,7 @@ class Report(object):
         print()
         max_width = len_on_screen(max(self.entries_by_category, key = lambda entry : len(entry)))
         label = "Category"
-        for category in self.categories:
+        for category in self.entries_by_category:
             entries = self.entries_by_category[category]
             count = len(entries)
             s = "* {0}{1} - {2:3}".format(category, " " * (max_width - len_on_screen(category)), count)
@@ -176,8 +189,8 @@ def main(argv):
         setting_file = argv[1]
     else:
         setting_file = os.path.join(os.path.dirname(__file__), "pokalint_setting.json")
-    inspecter = Inspecter(setting_file)
-    report = inspecter.inspect(sys.stdin.readlines())
+    inspector = Inspector(setting_file)
+    report = inspector.inspect(sys.stdin.readlines())
     report.output()
 
 if __name__ == "__main__":
