@@ -94,6 +94,11 @@ class Report(object):
         self.entries_by_category[category].append(entry)
 
     def output(self):
+        self.output_detail()
+        print("-" * 40 + "\n")
+        self.output_summary()
+
+    def output_detail(self):
         for category in self.categories:
             entries = self.entries_by_category[category]
             count = len(entries)
@@ -110,6 +115,23 @@ class Report(object):
                 width_match = len_on_screen(entry.text[entry.start:entry.end])
                 print(" " * width_start + "^" * width_match)
                 print()
+
+    def output_summary(self):
+        print("# SUMMARY")
+        print()
+        print("## Inspection")
+        print()
+        max_width = len_on_screen(max(self.entries_by_category, key = lambda entry : len(entry)))
+        label = "Category"
+        for category in self.categories:
+            entries = self.entries_by_category[category]
+            count = len(entries)
+            s = "* " + category + " " * (max_width - len_on_screen(category)) + " - "
+            if count == 0:
+                print(concolor.green(s + "OK"))
+            else:
+                print(concolor.red(s + "FAIL " + str(count)))
+        print()
 
 class Entry(object):
     pass
