@@ -124,11 +124,11 @@ class Report(object):
         for category in self.categories:
             entries = self.entries_by_category[category]
             count = len(entries)
-            s = "# " + category + " - "
+            s = "# {0} - {1}".format(category, count)
             if count == 0:
-                print(concolor.green(s + "OK"))
+                print(concolor.green(s))
             else:
-                print(concolor.red(s + "FAIL " + str(count)))
+                print(concolor.red(s))
             print()
             for entry in entries:
                 print("{0}:{1}".format(entry.filename, entry.lineno))
@@ -161,11 +161,11 @@ class Report(object):
         for category in self.categories:
             entries = self.entries_by_category[category]
             count = len(entries)
-            s = "* " + category + " " * (max_width - len_on_screen(category)) + " - "
+            s = "* {0}{1} - {2:3}".format(category, " " * (max_width - len_on_screen(category)), count)
             if count == 0:
-                print(concolor.green(s + "OK"))
+                print(concolor.green(s))
             else:
-                print(concolor.red(s + "FAIL " + str(count)))
+                print(concolor.red(s))
         print()
 
 class Entry(object):
