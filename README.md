@@ -41,7 +41,7 @@ The setting file supports JSON format.
 
 ```json
 {
-    "{group-name}" : [
+    "{category-name}" : [
         "{text-pattern}",
         "/{regex-pattern}/",
         "/{regex-pattern}/i"  // Ignore case

@@ -7,15 +7,14 @@ import json
 import concolor
 import unicodedata
 
-class Context(object):
-    def __init__(self):
-        self.filename = None
-        self.lineno = 0
+def len_on_screen(s):
+    sw = 0
+    for c in s:
+        cw = unicodedata.east_asian_width(c)
+        sw += 2 if (cw == 'F' or cw == 'W' or cw == "A") else 1
+    return sw
 
 class Pattern(object):
-    '''
-    Regex or string pattern object
-    '''
     def __init__(self, pattern):
         match = re.match(r"/(.*)/(\w)?", pattern)
         if match:
@@ -27,6 +26,7 @@ class Pattern(object):
         else:
             self.pattern = pattern
             self.regex = False
+
     def match(self, s):
         position = None
         if self.regex:
@@ -39,84 +39,89 @@ class Pattern(object):
                 position = (index, index + len(self.pattern))
         return position
 
-class Entry(object):
-    def __init__(self, filename, lineno, start, end, text):
-        self.filename = filename
-        self.lineno = lineno
-        self.start = start
-        self.end = end
-        self.text = text
+class Inspecter(object):
+    def __init__(self, setting_path):
+        self.patterns_by_category = {}
+        setting_json = json.load(open(setting_path))
+        self.categories = setting_json.keys()
+        for category in self.categories:
+            self.patterns_by_category[category] = list(map(lambda p: Pattern(p), setting_json[category]))
+        self.current_filename = ""
+        self.current_lineno = 0
+        self.report = None
 
-def get_string_width(s):
-    sw = 0
-    for c in s:
-        cw = unicodedata.east_asian_width(c)
-        sw += 2 if (cw == 'F' or cw == 'W' or cw == "A") else 1
-    return sw
+    def inspect(self, lines):
+        self.report = Report(self.categories)
+        filename_pattern = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
+        lineno_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
+        for line in lines:
+            if line.startswith("+++"):
+                self.current_filename = filename_pattern.match(line).group(1)
+            elif line.startswith("@@"):
+                self.current_lineno = int(lineno_pattern.match(line).group(1))
+            else:
+                if line.startswith("+"):
+                    self.__inspect_line(line[1:].rstrip("\n"))
+                    self.report.total_add += 1
+                elif line.startswith("-"):
+                    self.report.total_remove += 1
+                self.current_lineno += 1
+        return self.report
 
-def load_setting(path):
-    setting = json.load(open(path))
-    for key in setting:
-        patterns = []
-        for p in setting[key]:
-            patterns.append(Pattern(p))
-        setting[key] = patterns
-    return setting
+    def __inspect_line(self, line):
+        for category in self.categories:
+            for pattern in self.patterns_by_category[category]:
+                position = pattern.match(line)
+                if position:
+                    entry = Entry()
+                    entry.filename = self.current_filename
+                    entry.lineno = self.current_lineno
+                    entry.start = position[0]
+                    entry.end = position[1]
+                    entry.text = line.replace("\t", " ")
+                    self.report.add_entry(category, entry)
 
-def inspect_line(context, line, setting, report):
-    for key in setting:
-        for pattern in setting[key]:
-            position = pattern.match(line)
-            if position:
-                report[key].append(Entry(context.filename, context.lineno, position[0], position[1], line.replace("\t", " ")))
+class Report(object):
+    def __init__(self, categories):
+        self.categories = categories
+        self.entries_by_category = {}
+        for category in categories:
+            self.entries_by_category[category] = []
+        self.total_add = 0
+        self.total_remove = 0
 
-def inspect_lines(lines, setting, report):
-    context = Context()
-    filename_pattern = re.compile(r"^\+\+\+ b/(.+)$")
-    lineno_pattern = re.compile(r"^@@ -\d+,\d+ \+(\d+),\d+ @@")
-    for line in lines:
-        if line.startswith("+++"):
-            context.filename = filename_pattern.match(line).group(1)
-        elif line.startswith("@@"):
-            context.lineno = int(lineno_pattern.match(line).group(1))
-        else:
-            if line.startswith("+"):
-                inspect_line(context, line[1:].rstrip("\n"), setting, report)
-            context.lineno += 1
+    def add_entry(self, category, entry):
+        self.entries_by_category[category].append(entry)
 
-def new_report(setting):
-    report = {}
-    for key in setting:
-        report[key] = []
-    return report
-
-def output_report(report):
-    for key in report:
-        count = len(report[key])
-        message = "# " + key + " - "
-        if count == 0:
-            print(concolor.green(message + "OK"))
-        else:
-            print(concolor.red(message + "NOK:" + str(count)))
-        print()
-        for entry in report[key]:
-            print("{0}:{1}".format(entry.filename, entry.lineno))
-            print(entry.text)
-            width_start = get_string_width(entry.text[:entry.start])
-            width_match = get_string_width(entry.text[entry.start:entry.end])
-            print(" " * width_start + "^" * width_match)
+    def output(self):
+        for category in self.categories:
+            entries = self.entries_by_category[category]
+            count = len(entries)
+            s = "# " + category + " - "
+            if count == 0:
+                print(concolor.green(s + "OK"))
+            else:
+                print(concolor.red(s + "FAIL " + str(count)))
             print()
+            for entry in entries:
+                print("{0}:{1}".format(entry.filename, entry.lineno))
+                print(entry.text)
+                width_start = len_on_screen(entry.text[:entry.start])
+                width_match = len_on_screen(entry.text[entry.start:entry.end])
+                print(" " * width_start + "^" * width_match)
+                print()
+
+class Entry(object):
+    pass
 
 def main(argv):
     if 1 < len(argv):
         setting_file = argv[1]
     else:
         setting_file = os.path.join(os.path.dirname(__file__), "pokalint_setting.json")
-    setting = load_setting(setting_file)
-    
-    report = new_report(setting)
-    inspect_lines(sys.stdin.readlines(), setting, report)
-    output_report(report)
+    inspecter = Inspecter(setting_file)
+    report = inspecter.inspect(sys.stdin.readlines())
+    report.output()
 
 if __name__ == "__main__":
     main(sys.argv)
