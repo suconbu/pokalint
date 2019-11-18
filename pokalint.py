@@ -49,7 +49,7 @@ class Pattern(object):
 class Inspector(object):
     def __init__(self, setting_path):
         setting_root = json.load(open(setting_path))
-        self.inspect_patterns_by_category = self.__get_patterns_from_setting(setting_root["inspect"])
+        self.warning_patterns_by_category = self.__get_patterns_from_setting(setting_root["warning"])
         self.current_filename = ""
         self.current_lineno = 0
         self.report = None
@@ -61,7 +61,7 @@ class Inspector(object):
         return patterns
 
     def inspect(self, lines):
-        self.report = Report(self.inspect_patterns_by_category.keys())
+        self.report = Report(self.warning_patterns_by_category.keys())
         filename_pattern = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
         lineno_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
@@ -79,7 +79,6 @@ class Inspector(object):
             else:
                 if line.startswith("-"):
                     remove_count += 1
-                    #self.report.remove_line_count += 1
                 elif line.startswith("+"):
                     add_count += 1
                     self.__inspect_line(line[1:].rstrip("\n"))
@@ -99,8 +98,8 @@ class Inspector(object):
         return self.report
 
     def __inspect_line(self, line):
-        for category in self.inspect_patterns_by_category:
-            for pattern in self.inspect_patterns_by_category[category]:
+        for category in self.warning_patterns_by_category:
+            for pattern in self.warning_patterns_by_category[category]:
                 position = pattern.match(line)
                 if position:
                     entry = Entry()
@@ -121,65 +120,95 @@ class Report(object):
         self.add_line_count = 0
         self.remove_line_count = 0
         self.modify_line_count = 0
+        self.__styling = False
+        self.__indent_level = 0
+        self.__newline = True
 
     def add_entry(self, category, entry):
         self.entries_by_category[category].append(entry)
 
-    def output(self):
-        self.output_detail()
-        print("-" * 40 + "\n")
-        self.output_summary()
-
-    def output_detail(self):
-        for category in self.entries_by_category:
-            entries = self.entries_by_category[category]
-            count = len(entries)
-            s = "# {0} - {1}".format(category, count)
-            if count == 0:
-                print(concolor.green(s))
-            else:
-                print(concolor.red(s))
-            print()
-            for entry in entries:
-                print("{0}:{1}".format(entry.filename, entry.lineno))
-                print(entry.text)
-                width_start = len_on_screen(entry.text[:entry.start])
-                width_match = len_on_screen(entry.text[entry.start:entry.end])
-                print(" " * width_start + "^" * width_match)
-                if entry.pattern.message:
-                    match_word = entry.text[entry.start:entry.end]
-                    print(entry.pattern.message.replace("{0}", match_word))
-                print()
-
-    def output_summary(self):
-        print("# SUMMARY")
+    def output(self, styling):
+        self.__styling = styling
+        self.output_inspection_result()
+        self.__print("-" * 40)
         print()
         self.output_statistics()
-        self.output_inspection()
+        self.output_inspection_summary()
 
-    def output_statistics(self):
-        print("## Statistics")
-        print()
-        print("* Change file  - {0:5} files".format(self.change_file_count))
-        print("* Total modify - {0:5} lines".format(self.modify_line_count))
-        print("* Total add    - {0:5} lines".format(self.add_line_count))
-        print("* Total remove - {0:5} lines".format(self.remove_line_count))
-        print()
-
-    def output_inspection(self):
-        print("## Inspection")
-        print()
-        max_width = len_on_screen(max(self.entries_by_category, key = lambda entry : len(entry)))
-        label = "Category"
+    def output_inspection_result(self):
         for category in self.entries_by_category:
             entries = self.entries_by_category[category]
             count = len(entries)
-            s = "* {0}{1} - {2:3}".format(category, " " * (max_width - len_on_screen(category)), count)
-            if count == 0:
-                print(concolor.green(s))
+            if 0 < count:
+                self.__print("# {0} - {1}".format(category, count), "red")
+                self.__print()
+                self.__indent()
+                for entry in entries:
+                    self.__print("{0}:{1}  ".format(entry.filename, entry.lineno), "*")
+
+                    self.__print("```")
+                    self.__print(entry.text[:entry.start], "", False)
+                    self.__print(entry.text[entry.start:entry.end], "*red", False)
+                    self.__print(entry.text[entry.end:])
+
+                    width_start = len_on_screen(entry.text[:entry.start])
+                    width_match = len_on_screen(entry.text[entry.start:entry.end])
+                    self.__print(" " * width_start + "^" + "~" * (width_match - 1), "*red")
+                    if entry.pattern.message:
+                        match_word = entry.text[entry.start:entry.end]
+                        self.__print(entry.pattern.message.replace("{0}", match_word))
+                    self.__print("```")
+                    self.__print()
+                self.__unindent()
+
+    def output_statistics(self):
+        self.__print("# Statistics")
+        self.__print()
+        self.__indent()
+        self.__print("* Change file  - {0:5} files".format(self.change_file_count))
+        self.__print("* Total modify - {0:5} lines".format(self.modify_line_count))
+        self.__print("* Total add    - {0:5} lines".format(self.add_line_count))
+        self.__print("* Total remove - {0:5} lines".format(self.remove_line_count))
+        self.__unindent()
+        self.__print()
+
+    def output_inspection_summary(self):
+        self.__print("# Warnings")
+        self.__print()
+        self.__indent()
+        max_width = len_on_screen(max(self.entries_by_category, key = lambda entry : len(entry)))
+        for category in self.entries_by_category:
+            entries = self.entries_by_category[category]
+            count = len(entries)
+            self.__print(
+                "* {0}{1} - {2:3}".format(category, " " * (max_width - len_on_screen(category)), count),
+                "green" if (count == 0) else "red")
+        self.__unindent()
+        self.__print()
+
+    def __print(self, string = "", style = "", newline = True):
+        if self.__styling:
+            bold = style.startswith("*")
+            color = style[1:] if bold else style
+            if color == "red":
+                s = concolor.red(string, bold)
+            elif color == "green":
+                s = concolor.green(string, bold)
             else:
-                print(concolor.red(s))
-        print()
+                s = concolor.default(string, bold)
+        else:
+            s = string
+        print(
+            ("  " * self.__indent_level + s) if self.__newline else s,
+            end = "\n" if newline else "")
+        self.__newline = newline
+
+    def __indent(self):
+        self.__indent_level += 1
+
+    def __unindent(self):
+        if 0 < self.__indent_level:
+            self.__indent_level -= 1
 
 class Entry(object):
     pass
@@ -191,7 +220,7 @@ def main(argv):
         setting_file = os.path.join(os.path.dirname(__file__), "pokalint_setting.json")
     inspector = Inspector(setting_file)
     report = inspector.inspect(sys.stdin.readlines())
-    report.output()
+    report.output(sys.stdout.isatty())
 
 if __name__ == "__main__":
     main(sys.argv)

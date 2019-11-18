@@ -1,12 +1,12 @@
 {
-	"inspect":{
-		"Deprecated":[
+	"warning":{
+		"非推奨":[
 			{"pattern":"/\\bstrcpy\\b/", "message":"{0} は時代遅れです。strcpy_s の使用を推奨します。"},
 			{"pattern":"/\\bstrcmp\\b/", "message":"{0} は時代遅れです。strcmp_s の使用を推奨します。"},
 			{"pattern":"/\\bato\\w{1,2}\\b/", "message":"{0} は時代遅れです。strtol とかの使用を推奨します。"},
 			{"pattern":"/=\\s*{\\s*0\\s*}/", "message":"配列/構造体のゼロ初期化には = {} の使用を推奨します。"}
 		],
-		"Typo":[
+		"タイプミス":[
 			"convart",
 			"fromat",
 			"chagne",
@@ -14,12 +14,12 @@
 			"chack",
 			"cash"
 		],
-		"Temporary":[
+		"暫定":[
 			"zantei",
 			"暫定",
 			"とりあえず"
 		],
-		"DebugCode":[
+		"デバッグ用":[
 			"@test",
 			"@debug"
 		],

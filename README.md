@@ -41,7 +41,7 @@ The setting file supports JSON format.
 
 ```c
 {
-    "inspect" : {
+    "warning" : {
         "{category-name}" : [
 
             // Format 1
@@ -52,7 +52,7 @@ The setting file supports JSON format.
             "{pattern}",
 
             // Format 2
-            // {message} is output at inspection
+            // Output {message} on warning
             {
                 "pattern" : "{pattern}",
                 "message" : "{message}"
@@ -64,4 +64,4 @@ The setting file supports JSON format.
     }
 }
 ```
-* "\\" In regular expressions must be escaped. (e.g. "/\\\\w+_\\\\d+/")
+* "\\" In back-slash in regular expressions must be escaped. (e.g. "/\\\\w+_\\\\d+/")
