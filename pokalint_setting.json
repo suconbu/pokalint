@@ -1,4 +1,7 @@
 {
+	"exclude-path-patterns":[
+		"/\\.txt$/i"
+	],
 	"warning":{
 		"非推奨":[
 			{"pattern":"/\\bstrcpy\\b/", "message":"{0} は時代遅れです。strcpy_s の使用を推奨します。"},

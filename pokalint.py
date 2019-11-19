@@ -46,19 +46,30 @@ class Pattern(object):
                 position = (index, index + len(self.pattern))
         return position
 
+    def match_any(patterns, s):
+        for pattern in patterns:
+            position = pattern.match(s)
+            if position:
+                return position
+        return None
+
 class Inspector(object):
     def __init__(self, setting_path):
         setting_root = json.load(open(setting_path))
-        self.warning_patterns_by_category = self.__get_patterns_from_setting(setting_root["warning"])
+        self.exclude_path_patterns = self.__get_patterns(setting_root["exclude-path-patterns"])
+        self.warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
         self.current_filename = ""
         self.current_lineno = 0
         self.report = None
 
-    def __get_patterns_from_setting(self, setting_group):
+    def __get_patterns_by_category(self, categories):
         patterns = {}
-        for category in setting_group.keys():
-            patterns[category] = list(map(lambda p: Pattern(p), setting_group[category]))
+        for category in categories.keys():
+            patterns[category] = self.__get_patterns(categories[category])
         return patterns
+
+    def __get_patterns(self, array):
+        return list(map(lambda p: Pattern(p), array))
 
     def inspect(self, lines):
         self.report = Report(self.warning_patterns_by_category.keys())
@@ -70,7 +81,11 @@ class Inspector(object):
             if line.startswith("---"):
                 pass
             elif line.startswith("+++"):
-                self.current_filename = filename_pattern.match(line).group(1)
+                filename = filename_pattern.match(line).group(1)
+                if Pattern.match_any(self.exclude_path_patterns, filename):
+                    self.current_filename = None
+                else:
+                    self.current_filename = filename_pattern.match(line).group(1)
                 self.report.change_file_count += 1
             elif line.startswith("@@"):
                 self.current_lineno = int(lineno_pattern.match(line).group(1))
@@ -81,7 +96,8 @@ class Inspector(object):
                     remove_count += 1
                 elif line.startswith("+"):
                     add_count += 1
-                    self.__inspect_line(line[1:].rstrip("\n"))
+                    if self.current_filename:
+                        self.__inspect_line(line[1:].rstrip("\n"))
                 else:
                     if 0 < add_count:
                         if remove_count <= add_count:
