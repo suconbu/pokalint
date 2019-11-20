@@ -57,6 +57,7 @@ class Inspector(object):
     def __init__(self, setting_path):
         setting_root = json.load(open(setting_path))
         self.exclude_path_patterns = self.__get_patterns(setting_root["exclude-path-patterns"])
+        self.counter_patterns_by_category = self.__get_patterns_by_category(setting_root["counter"])
         self.warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
         self.current_filename = ""
         self.current_lineno = 0
@@ -69,10 +70,12 @@ class Inspector(object):
         return patterns
 
     def __get_patterns(self, array):
-        return list(map(lambda p: Pattern(p), array))
+        return list(map(Pattern, array))
 
     def inspect(self, lines):
-        self.report = Report(self.warning_patterns_by_category.keys())
+        self.report = Report(
+            self.counter_patterns_by_category.keys(),
+            self.warning_patterns_by_category.keys())
         filename_pattern = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
         lineno_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
@@ -126,12 +129,16 @@ class Inspector(object):
                     entry.text = line.replace("\t", " ")
                     entry.pattern = pattern
                     self.report.add_entry(category, entry)
+        for category in self.counter_patterns_by_category:
+            for pattern in self.counter_patterns_by_category[category]:
+                position = pattern.match(line)
+                if position:
+                    self.report.increase_count(category)
 
 class Report(object):
-    def __init__(self, categories):
-        self.entries_by_category = {}
-        for category in categories:
-            self.entries_by_category[category] = []
+    def __init__(self, counter_categories, warning_categories):
+        self.counter_by_category = dict.fromkeys(counter_categories, 0)
+        self.entries_by_category = {category: [] for category in warning_categories}
         self.change_file_count = 0
         self.add_line_count = 0
         self.remove_line_count = 0
@@ -140,8 +147,11 @@ class Report(object):
         self.__indent_level = 0
         self.__newline = True
 
-    def add_entry(self, category, entry):
-        self.entries_by_category[category].append(entry)
+    def increase_count(self, cateogry):
+        self.counter_by_category[cateogry] += 1
+
+    def add_entry(self, cateogry, entry):
+        self.entries_by_category[cateogry].append(entry)
 
     def output(self, styling):
         self.__styling = styling
@@ -149,6 +159,7 @@ class Report(object):
         self.__print("-" * 40)
         print()
         self.output_statistics()
+        self.output_counter()
         self.output_inspection_summary()
 
     def output_inspection_result(self):
@@ -178,13 +189,27 @@ class Report(object):
                 self.__unindent()
 
     def output_statistics(self):
-        self.__print("# Statistics")
+        self.__print("# Summary")
         self.__print()
         self.__indent()
         self.__print("* Change file  - {0:5} files".format(self.change_file_count))
         self.__print("* Total modify - {0:5} lines".format(self.modify_line_count))
         self.__print("* Total add    - {0:5} lines".format(self.add_line_count))
         self.__print("* Total remove - {0:5} lines".format(self.remove_line_count))
+        self.__unindent()
+        self.__print()
+
+    def output_counter(self):
+        self.__print("# Counts")
+        self.__print()
+        self.__indent()
+        max_width = len_on_screen(max(self.counter_by_category, key = lambda entry : len(entry)))
+        for category in self.counter_by_category:
+            count = self.counter_by_category[category]
+            self.__print("* {0}{1} - {2:5} {3}".format(
+                category, " " * (max_width - len_on_screen(category)),
+                count,
+                "#" * count))
         self.__unindent()
         self.__print()
 
@@ -197,7 +222,7 @@ class Report(object):
             entries = self.entries_by_category[category]
             count = len(entries)
             self.__print(
-                "* {0}{1} - {2:3}".format(category, " " * (max_width - len_on_screen(category)), count),
+                "* {0}{1} - {2:3} {3}".format(category, " " * (max_width - len_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
         self.__unindent()
         self.__print()

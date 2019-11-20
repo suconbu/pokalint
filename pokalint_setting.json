@@ -2,6 +2,25 @@
 	"exclude-path-patterns":[
 		"/\\.txt$/i"
 	],
+	"counter":{
+		"if":["/(?<!else )if\\b/"],
+		"for/while":["/\\bfor|while\\b/"],
+		"break":["/\\breturn\\b/"],
+		"continue":["/\\bcontinue\\b/"],
+		"goto":["/\\bgoto\\b/"],
+		"return":["/\\breturn\\b/"],
+		"#include":["/#include\\b/"],
+		"#define":["/#define\\b/"],
+		"enum":["/\\benum\\b/"],
+		"class":["/\\bclass\\b/"],
+		"struct":["/\\bstruct\\b/"],
+		"typedef":["/\\btypedef\\b/"],
+		"printf":["/\\w*printf\\w*/"],
+		"scanf":["/\\w*scanf\\w*/"],
+		"func-def":["/\\w+(\\s+|\\s*\\*\\s*)\\w+\\s*\\(($|[^;]+$)/"],
+		"malloc":["/\\b\\w*alloc\\w*\\b/i"],
+		"free":["/\\b\\w*free\\w*\\b/i"]
+	},
 	"warning":{
 		"非推奨":[
 			{"pattern":"/\\bstrcpy\\b/", "message":"{0} は時代遅れです。strcpy_s の使用を推奨します。"},
