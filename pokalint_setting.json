@@ -17,7 +17,6 @@
 		"typedef":["/\\btypedef\\b/"],
 		"printf":["/\\w*printf\\w*/"],
 		"scanf":["/\\w*scanf\\w*/"],
-		"func-def":["/\\w+(\\s+|\\s*\\*\\s*)\\w+\\s*\\(($|[^;]+$)/"],
 		"malloc":["/\\b\\w*alloc\\w*\\b/i"],
 		"free":["/\\b\\w*free\\w*\\b/i"]
 	},

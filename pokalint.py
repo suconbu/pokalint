@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import json
+import datetime
 import concolor
 import unicodedata
 import collections
@@ -228,6 +229,25 @@ class Report(object):
         self.__unindent()
         self.__print()
 
+
+    def write_log(self, log_dir):
+        now = datetime.datetime.now()
+        log_path = os.path.join(log_dir, "{0:04}W{1:02}".format(now.year, now.isocalendar()[1]) + ".log")
+        with open(log_path, "a") as f:
+            summary = {}
+            summary["f"] = self.change_file_count
+            summary["+"] = self.add_line_count
+            summary["-"] = self.remove_line_count
+            warnings = {}
+            for category in self.entries_by_category:
+                entries = self.entries_by_category[category]
+                warnings[category] = len(entries)
+            data = {"summary":summary, "warnings": warnings}
+            f.write("{0};{1};{2};\n".format(
+                re.sub("[-:]", "", now.isoformat(timespec="seconds")),
+                os.getcwd(),
+                json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
+
     def __print(self, string = "", style = "", newline = True):
         if self.__styling:
             bold = style.startswith("*")
@@ -256,13 +276,18 @@ class Entry(object):
     pass
 
 def main(argv):
+    app_dir = os.path.dirname(__file__)
     if 1 < len(argv):
         setting_file = argv[1]
     else:
-        setting_file = os.path.join(os.path.dirname(__file__), "pokalint_setting.json")
+        setting_file = os.path.join(app_dir, "pokalint_setting.json")
     inspector = Inspector(setting_file)
     report = inspector.inspect(sys.stdin.readlines())
     report.output(sys.stdout.isatty())
+
+    log_dir = os.path.join(app_dir, "log")
+    if os.path.isdir(log_dir):
+        report.write_log(log_dir)
 
 if __name__ == "__main__":
     main(sys.argv)

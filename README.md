@@ -41,6 +41,10 @@ The setting file supports JSON format.
 
 ```c
 {
+    "counter" : {
+        "{category-name}" : [ "{pattern}", ... ]
+        :
+    },
     "warning" : {
         "{category-name}" : [
 
