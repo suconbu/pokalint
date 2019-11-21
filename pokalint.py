@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import os
-import sys
 import re
+import sys
 import json
 import concolor
 import unicodedata
+import collections
 
 def len_on_screen(s):
     sw = 0
@@ -55,7 +56,7 @@ class Pattern(object):
 
 class Inspector(object):
     def __init__(self, setting_path):
-        setting_root = json.load(open(setting_path))
+        setting_root = json.load(open(setting_path), object_pairs_hook = collections.OrderedDict)
         self.exclude_path_patterns = self.__get_patterns(setting_root["exclude-path-patterns"])
         self.counter_patterns_by_category = self.__get_patterns_by_category(setting_root["counter"])
         self.warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
