@@ -244,7 +244,7 @@ class Report(object):
                 warnings[category] = len(entries)
             data = {"summary":summary, "warnings": warnings}
             f.write("{0};{1};{2};\n".format(
-                re.sub("[-:]", "", now.isoformat(timespec="seconds")),
+                re.sub("[-:]", "", re.sub("\.\d*", "", now.isoformat())),
                 os.getcwd(),
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
