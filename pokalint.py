@@ -81,7 +81,7 @@ class Inspector(object):
         filename_pattern = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
         lineno_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
-        remove_count = 0
+        delete_count = 0
         for line in lines:
             if line.startswith("---"):
                 pass
@@ -91,30 +91,32 @@ class Inspector(object):
                     self.current_filename = None
                 else:
                     self.current_filename = filename_pattern.match(line).group(1)
-                self.report.change_file_count += 1
+                self.report.changed_file_count += 1
             elif line.startswith("@@"):
-                self.current_lineno = int(lineno_pattern.match(line).group(1))
                 add_count = 0
-                remove_count = 0
+                self.current_lineno = int(lineno_pattern.match(line).group(1))
+                delete_count = 0
             else:
                 if line.startswith("-"):
-                    remove_count += 1
+                    delete_count += 1
                 elif line.startswith("+"):
                     add_count += 1
                     if self.current_filename:
                         self.__inspect_line(line[1:].rstrip("\n"))
                 else:
                     if 0 < add_count:
-                        if remove_count <= add_count:
-                            self.report.modify_line_count += remove_count
-                            self.report.add_line_count += (add_count - remove_count)
-                        elif add_count < remove_count:
-                            self.report.modify_line_count += add_count
-                            self.report.remove_line_count += (remove_count - add_count)
-                    elif 0 < remove_count:
-                        self.report.remove_line_count += remove_count
+                        if delete_count == 0:
+                            self.report.pure_added_line_count += add_count
+                            self.report.added_block_count += 1
+                        else:
+                            self.report.replace_added_line_count += add_count
+                            self.report.replace_deleted_line_count += delete_count
+                            self.report.replaced_block_count += 1
+                    elif 0 < delete_count:
+                        self.report.pure_deleted_line_count += delete_count
+                        self.report.deleted_block_count += 1
                     add_count = 0
-                    remove_count = 0
+                    delete_count = 0
                 self.current_lineno += 1
         return self.report
 
@@ -143,10 +145,14 @@ class Report(object):
         self.entries_by_category = OrderedDict()
         for category in warning_categories:
             self.entries_by_category[category] = []
-        self.change_file_count = 0
-        self.add_line_count = 0
-        self.remove_line_count = 0
-        self.modify_line_count = 0
+        self.changed_file_count = 0
+        self.pure_added_line_count = 0
+        self.pure_deleted_line_count = 0
+        self.replace_added_line_count = 0
+        self.replace_deleted_line_count = 0
+        self.added_block_count = 0
+        self.deleted_block_count = 0
+        self.replaced_block_count = 0
         self.__styling = False
         self.__indent_level = 0
         self.__newline = True
@@ -196,10 +202,19 @@ class Report(object):
         self.__print("# Summary")
         self.__print()
         self.__indent()
-        self.__print("* Change file  - {0:5} files".format(self.change_file_count))
-        self.__print("* Total modify - {0:5} lines".format(self.modify_line_count))
-        self.__print("* Total add    - {0:5} lines".format(self.add_line_count))
-        self.__print("* Total remove - {0:5} lines".format(self.remove_line_count))
+        self.__print("* Changed file   - {0:5}".format(self.changed_file_count))
+        self.__print("* Block")
+        self.__print("  * Add          - {0:5}".format(self.added_block_count))
+        self.__print("  * Delete       - {0:5}".format(self.deleted_block_count))
+        self.__print("  * Replace      - {0:5}".format(self.replaced_block_count))
+        self.__print("* Line")
+        self.__print("  * Total add    - {0:5}".format(self.pure_added_line_count + self.replace_added_line_count))
+        self.__print("    * Pure       - {0:5}".format(self.pure_added_line_count))
+        self.__print("    * Replace    - {0:5}".format(self.replace_added_line_count))
+        self.__print("  * Total delete - {0:5}".format(self.pure_deleted_line_count + self.replace_deleted_line_count))
+        self.__print("    * Pure       - {0:5}".format(self.pure_deleted_line_count))
+        self.__print("    * Replace    - {0:5}".format(self.replace_deleted_line_count))
+        self.__unindent()
         self.__unindent()
         self.__print()
 
@@ -237,9 +252,9 @@ class Report(object):
         log_path = os.path.join(log_dir, "{0:04}W{1:02}".format(now.year, now.isocalendar()[1]) + ".log")
         with open(log_path, "a") as f:
             summary = OrderedDict()
-            summary["f"] = self.change_file_count
-            summary["+"] = self.add_line_count
-            summary["-"] = self.remove_line_count
+            summary["f"] = self.changed_file_count
+            summary["+"] = self.pure_added_line_count + self.replace_added_line_count
+            summary["-"] = self.pure_deleted_line_count + self.replace_deleted_line_count
             warnings = OrderedDict()
             for category in self.entries_by_category:
                 entries = self.entries_by_category[category]
@@ -258,6 +273,8 @@ class Report(object):
                 s = concolor.red(string, bold)
             elif color == "green":
                 s = concolor.green(string, bold)
+            elif color == "cyan":
+                s = concolor.cyan(string, bold)
             else:
                 s = concolor.default(string, bold)
         else:
