@@ -4,6 +4,7 @@
 	],
 	"counter":{
 		"if":["/(?<!else )if\\b/"],
+		"switch":["/\\bswitch\\b/"],
 		"for/while":["/\\bfor|while\\b/"],
 		"break":["/\\breturn\\b/"],
 		"continue":["/\\bcontinue\\b/"],

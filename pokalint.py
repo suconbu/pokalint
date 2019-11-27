@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import math
 import json
 import datetime
 import concolor
@@ -91,7 +92,7 @@ class Inspector(object):
                     self.current_filename = None
                 else:
                     self.current_filename = filename_pattern.match(line).group(1)
-                self.report.changed_file_count += 1
+                self.report.increase_file_count(os.path.splitext(filename)[1])
             elif line.startswith("@@"):
                 add_count = 0
                 self.current_lineno = int(lineno_pattern.match(line).group(1))
@@ -137,15 +138,10 @@ class Inspector(object):
             for pattern in self.counter_patterns_by_category[category]:
                 position = pattern.match(line)
                 if position:
-                    self.report.increase_count(category)
+                    self.report.increase_keyword_count(category)
 
 class Report(object):
     def __init__(self, counter_categories, warning_categories):
-        self.counter_by_category = OrderedDict.fromkeys(counter_categories, 0)
-        self.entries_by_category = OrderedDict()
-        for category in warning_categories:
-            self.entries_by_category[category] = []
-        self.changed_file_count = 0
         self.pure_added_line_count = 0
         self.pure_deleted_line_count = 0
         self.replace_added_line_count = 0
@@ -153,18 +149,25 @@ class Report(object):
         self.added_block_count = 0
         self.deleted_block_count = 0
         self.replaced_block_count = 0
-        self.__styling = False
-        self.__indent_level = 0
-        self.__newline = True
+        self.__file_count_by_extension = {}
+        self.__keyword_count_by_category = OrderedDict.fromkeys(counter_categories, 0)
+        self.__entries_by_category = OrderedDict()
+        for category in warning_categories:
+            self.__entries_by_category[category] = []
+        self.__redirect = False
+        self.__bar_max = 80
 
-    def increase_count(self, cateogry):
-        self.counter_by_category[cateogry] += 1
+    def increase_file_count(self, extension):
+        self.__file_count_by_extension[extension] = self.__file_count_by_extension.setdefault(extension, 0) + 1
+
+    def increase_keyword_count(self, cateogry):
+        self.__keyword_count_by_category[cateogry] += 1
 
     def add_entry(self, cateogry, entry):
-        self.entries_by_category[cateogry].append(entry)
+        self.__entries_by_category[cateogry].append(entry)
 
-    def output(self, styling):
-        self.__styling = styling
+    def output(self, redirect):
+        self.__redirect = redirect
         self.output_inspection_result()
         self.__print("-" * 40)
         print()
@@ -173,13 +176,12 @@ class Report(object):
         self.output_inspection_summary()
 
     def output_inspection_result(self):
-        for category in self.entries_by_category:
-            entries = self.entries_by_category[category]
+        for category in self.__entries_by_category:
+            entries = self.__entries_by_category[category]
             count = len(entries)
             if 0 < count:
-                self.__print("# {0} - {1}".format(category, count), "red")
+                self.__print("# {0} - {1}".format(category, count), "cyan")
                 self.__print()
-                self.__indent()
                 for entry in entries:
                     self.__print("{0}:{1}  ".format(entry.filename, entry.lineno), "*")
 
@@ -196,54 +198,59 @@ class Report(object):
                         self.__print(entry.pattern.message.replace("{0}", match_word))
                     self.__print("```")
                     self.__print()
-                self.__unindent()
 
     def output_statistics(self):
-        self.__print("# Summary")
+        self.__print("# Summary", "cyan")
         self.__print()
-        self.__indent()
-        self.__print("* Changed file   - {0:5}".format(self.changed_file_count))
-        self.__print("* Block")
-        self.__print("  * Add          - {0:5}".format(self.added_block_count))
-        self.__print("  * Delete       - {0:5}".format(self.deleted_block_count))
-        self.__print("  * Replace      - {0:5}".format(self.replaced_block_count))
-        self.__print("* Line")
-        self.__print("  * Total add    - {0:5}".format(self.pure_added_line_count + self.replace_added_line_count))
-        self.__print("    * Pure       - {0:5}".format(self.pure_added_line_count))
-        self.__print("    * Replace    - {0:5}".format(self.replace_added_line_count))
-        self.__print("  * Total delete - {0:5}".format(self.pure_deleted_line_count + self.replace_deleted_line_count))
-        self.__print("    * Pure       - {0:5}".format(self.pure_deleted_line_count))
-        self.__print("    * Replace    - {0:5}".format(self.replace_deleted_line_count))
-        self.__unindent()
-        self.__unindent()
+
+        total_file_count = sum(self.__file_count_by_extension.values())
+        self.__print("  * Changed file ({0}):".format(total_file_count))
+        for ext in self.__file_count_by_extension:
+            self.__print("    * {0:10} - {1:4} files".format(ext[1:], self.__file_count_by_extension[ext]))
+
+        total_block_count = self.added_block_count + self.deleted_block_count + self.replaced_block_count;
+        self.__print("  * Diff block ({0}):".format(total_block_count))
+        self.__print("    * Add        - {0:4} blocks".format(self.added_block_count))
+        self.__print("    * Delete     - {0:4} blocks".format(self.deleted_block_count))
+        self.__print("    * Replace    - {0:4} blocks".format(self.replaced_block_count))
+
+        total_added = self.pure_added_line_count + self.replace_added_line_count;
+        total_deleted = self.pure_deleted_line_count + self.replace_deleted_line_count
+        self.__print("  * Changed line ({0}):".format(total_added + total_deleted))
+        self.__print("    * Add        - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
+            total_added,
+            self.pure_added_line_count,
+            self.replace_added_line_count))
+        self.__print("    * Delete     - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
+            total_deleted,
+            self.pure_deleted_line_count,
+            self.replace_deleted_line_count))
         self.__print()
 
     def output_counter(self):
-        self.__print("# Counts")
+        self.__print("# Counts", "cyan")
         self.__print()
-        self.__indent()
-        max_width = len_on_screen(max(self.counter_by_category, key = lambda entry : len(entry)))
-        for category in self.counter_by_category:
-            count = self.counter_by_category[category]
-            self.__print("* {0}{1} - {2:5} {3}".format(
+        max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda entry : len(entry)))
+        max_count = max(self.__keyword_count_by_category.values())
+        bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
+        for category in self.__keyword_count_by_category:
+            count = self.__keyword_count_by_category[category]
+            self.__print("  * {0}{1} - {2:4} {3}".format(
                 category, " " * (max_width - len_on_screen(category)),
                 count,
-                "#" * count))
-        self.__unindent()
+                "#" * math.ceil(count * bar_scale)))
         self.__print()
 
     def output_inspection_summary(self):
-        self.__print("# Warnings")
+        self.__print("# Warnings", "cyan")
         self.__print()
-        self.__indent()
-        max_width = len_on_screen(max(self.entries_by_category, key = lambda entry : len(entry)))
-        for category in self.entries_by_category:
-            entries = self.entries_by_category[category]
+        max_width = len_on_screen(max(self.__entries_by_category, key = lambda entry : len(entry)))
+        for category in self.__entries_by_category:
+            entries = self.__entries_by_category[category]
             count = len(entries)
             self.__print(
-                "* {0}{1} - {2:3} {3}".format(category, " " * (max_width - len_on_screen(category)), count, "#" * count),
+                "  * {0}{1} - {2:3} {3}".format(category, " " * (max_width - len_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
-        self.__unindent()
         self.__print()
 
 
@@ -252,12 +259,12 @@ class Report(object):
         log_path = os.path.join(log_dir, "{0:04}W{1:02}".format(now.year, now.isocalendar()[1]) + ".log")
         with open(log_path, "a") as f:
             summary = OrderedDict()
-            summary["f"] = self.changed_file_count
+            summary["f"] = sum(self.__file_count_by_extension.values())
             summary["+"] = self.pure_added_line_count + self.replace_added_line_count
             summary["-"] = self.pure_deleted_line_count + self.replace_deleted_line_count
             warnings = OrderedDict()
-            for category in self.entries_by_category:
-                entries = self.entries_by_category[category]
+            for category in self.__entries_by_category:
+                entries = self.__entries_by_category[category]
                 warnings[category] = len(entries)
             data = {"summary":summary, "warnings": warnings}
             f.write("{0};{1};{2};\n".format(
@@ -266,7 +273,7 @@ class Report(object):
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
     def __print(self, string = "", style = "", newline = True):
-        if self.__styling:
+        if self.__redirect:
             bold = style.startswith("*")
             color = style[1:] if bold else style
             if color == "red":
@@ -279,17 +286,7 @@ class Report(object):
                 s = concolor.default(string, bold)
         else:
             s = string
-        print(
-            ("  " * self.__indent_level + s) if self.__newline else s,
-            end = "\n" if newline else "")
-        self.__newline = newline
-
-    def __indent(self):
-        self.__indent_level += 1
-
-    def __unindent(self):
-        if 0 < self.__indent_level:
-            self.__indent_level -= 1
+        print(s, end = "\n" if newline else "")
 
 class Entry(object):
     pass
