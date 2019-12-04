@@ -8,6 +8,7 @@ import json
 import datetime
 import concolor
 import unicodedata
+from operator import itemgetter
 from collections import OrderedDict
 
 def len_on_screen(s):
@@ -65,6 +66,8 @@ class Inspector(object):
         self.current_filename = ""
         self.current_lineno = 0
         self.report = None
+        self.__funccall_re = re.compile(r"(\w+)\s*\(")
+        self.__keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
 
     def __get_patterns_by_category(self, categories):
         patterns = OrderedDict()
@@ -79,23 +82,23 @@ class Inspector(object):
         self.report = Report(
             self.counter_patterns_by_category.keys(),
             self.warning_patterns_by_category.keys())
-        filename_pattern = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
-        lineno_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
+        filename_re = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
+        lineno_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
         delete_count = 0
         for line in lines:
             if line.startswith("---"):
                 pass
             elif line.startswith("+++"):
-                filename = filename_pattern.match(line).group(1)
+                filename = filename_re.match(line).group(1)
                 if Pattern.match_any(self.exclude_path_patterns, filename):
                     self.current_filename = None
                 else:
-                    self.current_filename = filename_pattern.match(line).group(1)
+                    self.current_filename = filename_re.match(line).group(1)
                 self.report.increase_file_count(os.path.splitext(filename)[1])
             elif line.startswith("@@"):
                 add_count = 0
-                self.current_lineno = int(lineno_pattern.match(line).group(1))
+                self.current_lineno = int(lineno_re.match(line).group(1))
                 delete_count = 0
             else:
                 if line.startswith("-"):
@@ -139,6 +142,11 @@ class Inspector(object):
                 position = pattern.match(line)
                 if position:
                     self.report.increase_keyword_count(category)
+        matches = self.__funccall_re.findall(line)
+        if matches:
+            for match in matches:
+                if not match in self.__keywords:
+                    self.report.increase_funccall_count(match)
 
 class Report(object):
     def __init__(self, counter_categories, warning_categories):
@@ -154,6 +162,7 @@ class Report(object):
         self.__entries_by_category = OrderedDict()
         for category in warning_categories:
             self.__entries_by_category[category] = []
+        self.__funccall_count_by_name = {}
         self.__redirect = False
         self.__bar_max = 80
 
@@ -163,19 +172,23 @@ class Report(object):
     def increase_keyword_count(self, cateogry):
         self.__keyword_count_by_category[cateogry] += 1
 
+    def increase_funccall_count(self, name):
+        self.__funccall_count_by_name[name] = self.__funccall_count_by_name.setdefault(name, 0) + 1
+
     def add_entry(self, cateogry, entry):
         self.__entries_by_category[cateogry].append(entry)
 
     def output(self, redirect):
         self.__redirect = redirect
-        self.output_inspection_result()
+        self.output_warning_details()
         self.__print("-" * 40)
         print()
-        self.output_statistics()
-        self.output_counter()
-        self.output_inspection_summary()
+        self.output_summary()
+        self.output_counts()
+        self.output_funccalls()
+        self.output_warnings()
 
-    def output_inspection_result(self):
+    def output_warning_details(self):
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
             count = len(entries)
@@ -199,7 +212,7 @@ class Report(object):
                     self.__print("```")
                     self.__print()
 
-    def output_statistics(self):
+    def output_summary(self):
         self.__print("# Summary", "cyan")
         self.__print()
 
@@ -227,10 +240,10 @@ class Report(object):
             self.replace_deleted_line_count))
         self.__print()
 
-    def output_counter(self):
+    def output_counts(self):
         self.__print("# Counts", "cyan")
         self.__print()
-        max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda entry : len(entry)))
+        max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda k : len(k)))
         max_count = max(self.__keyword_count_by_category.values())
         bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
         for category in self.__keyword_count_by_category:
@@ -241,10 +254,21 @@ class Report(object):
                 "#" * math.ceil(count * bar_scale)))
         self.__print()
 
-    def output_inspection_summary(self):
+    def output_funccalls(self):
+        self.__print("# Function calls", "cyan")
+        self.__print()
+        sorted_list = list(self.__funccall_count_by_name.items())
+        sorted_list.sort(key = itemgetter(0), reverse = False)
+        sorted_list.sort(key = itemgetter(1), reverse = True)
+        max_width = len_on_screen(max(self.__funccall_count_by_name, key = lambda k : len(k)))
+        for name, count in sorted_list:
+            self.__print("  * {0}{1} - {2:4} {3}".format(name, " " * (max_width - len_on_screen(name)), count, "#" * count))
+        self.__print()
+
+    def output_warnings(self):
         self.__print("# Warnings", "cyan")
         self.__print()
-        max_width = len_on_screen(max(self.__entries_by_category, key = lambda entry : len(entry)))
+        max_width = len_on_screen(max(self.__entries_by_category, key = lambda k : len(k)))
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
             count = len(entries)
