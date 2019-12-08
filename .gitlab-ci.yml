@@ -1,0 +1,10 @@
+# Ref: https://techblog.nhn-techorus.com/archives/12531
+
+image: python:3-alpine
+
+before_script:
+  - pip install pytest pytest-cov
+
+test:
+  script:
+    - pytest --cov=.
