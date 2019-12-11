@@ -50,6 +50,7 @@ class Pattern(object):
                 position = (index, index + len(self.pattern))
         return position
 
+    @staticmethod
     def match_any(patterns, s):
         for pattern in patterns:
             position = pattern.match(s)
@@ -221,13 +222,13 @@ class Report(object):
         for ext in self.__file_count_by_extension:
             self.__print("    * {0:10} - {1:4} files".format(ext[1:], self.__file_count_by_extension[ext]))
 
-        total_block_count = self.added_block_count + self.deleted_block_count + self.replaced_block_count;
+        total_block_count = self.added_block_count + self.deleted_block_count + self.replaced_block_count
         self.__print("  * Diff block ({0}):".format(total_block_count))
         self.__print("    * Add        - {0:4} blocks".format(self.added_block_count))
         self.__print("    * Delete     - {0:4} blocks".format(self.deleted_block_count))
         self.__print("    * Replace    - {0:4} blocks".format(self.replaced_block_count))
 
-        total_added = self.pure_added_line_count + self.replace_added_line_count;
+        total_added = self.pure_added_line_count + self.replace_added_line_count
         total_deleted = self.pure_deleted_line_count + self.replace_deleted_line_count
         self.__print("  * Changed line ({0}):".format(total_added + total_deleted))
         self.__print("    * Add        - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
@@ -292,7 +293,7 @@ class Report(object):
                 warnings[category] = len(entries)
             data = {"summary":summary, "warnings": warnings}
             f.write("{0};{1};{2};\n".format(
-                re.sub("[-:]", "", re.sub("\.\d*", "", now.isoformat())),
+                re.sub("[-:]", "", re.sub(r"\.\d*", "", now.isoformat())),
                 os.getcwd(),
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
