@@ -181,6 +181,9 @@ class Report(object):
 
     def output(self, redirect):
         self.__redirect = redirect
+        self.__print()
+        self.__print("-" * 40)
+        self.__print()
         self.output_warning_details()
         self.__print("-" * 40)
         print()
@@ -194,7 +197,7 @@ class Report(object):
             entries = self.__entries_by_category[category]
             count = len(entries)
             if 0 < count:
-                self.__print("# {0} - {1}".format(category, count), "cyan")
+                self.__print("# {0} ({1})".format(category, count), "cyan")
                 self.__print()
                 for entry in entries:
                     self.__print("{0}:{1}  ".format(entry.filename, entry.lineno), "*")
@@ -207,15 +210,16 @@ class Report(object):
                     width_start = len_on_screen(entry.text[:entry.start])
                     width_match = len_on_screen(entry.text[entry.start:entry.end])
                     self.__print(" " * width_start + "^" + "~" * (width_match - 1), "*red")
+                    self.__print("```")
                     if entry.pattern.message:
                         match_word = entry.text[entry.start:entry.end]
-                        self.__print(entry.pattern.message.replace("{0}", match_word))
-                    self.__print("```")
+                        self.__print("* " + entry.pattern.message.replace("{0}", match_word))
                     self.__print()
 
     def output_summary(self):
         self.__print("# Summary", "cyan")
         self.__print()
+        self.__redirect and self.__print("```")
 
         total_file_count = sum(self.__file_count_by_extension.values())
         self.__print("  * Changed file ({0}):".format(total_file_count))
@@ -239,11 +243,14 @@ class Report(object):
             total_deleted,
             self.pure_deleted_line_count,
             self.replace_deleted_line_count))
+
+        self.__redirect and self.__print("```")
         self.__print()
 
     def output_counts(self):
         self.__print("# Counts", "cyan")
         self.__print()
+        self.__redirect and self.__print("```")
         max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda k : len(k)))
         max_count = max(self.__keyword_count_by_category.values())
         bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
@@ -253,22 +260,26 @@ class Report(object):
                 category, " " * (max_width - len_on_screen(category)),
                 count,
                 "#" * math.ceil(count * bar_scale)))
+        self.__redirect and self.__print("```")
         self.__print()
 
     def output_funccalls(self):
         self.__print("# Function calls", "cyan")
         self.__print()
+        self.__redirect and self.__print("```")
         sorted_list = list(self.__funccall_count_by_name.items())
         sorted_list.sort(key = itemgetter(0), reverse = False)
         sorted_list.sort(key = itemgetter(1), reverse = True)
         max_width = len_on_screen(max(self.__funccall_count_by_name, key = lambda k : len(k)))
         for name, count in sorted_list:
             self.__print("  * {0}{1} - {2:4} {3}".format(name, " " * (max_width - len_on_screen(name)), count, "#" * count))
+        self.__redirect and self.__print("```")
         self.__print()
 
     def output_warnings(self):
         self.__print("# Warnings", "cyan")
         self.__print()
+        self.__redirect and self.__print("```")
         max_width = len_on_screen(max(self.__entries_by_category, key = lambda k : len(k)))
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
@@ -276,6 +287,7 @@ class Report(object):
             self.__print(
                 "  * {0}{1} - {2:3} {3}".format(category, " " * (max_width - len_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
+        self.__redirect and self.__print("```")
         self.__print()
 
 
@@ -298,7 +310,7 @@ class Report(object):
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
     def __print(self, string = "", style = "", newline = True):
-        if self.__redirect:
+        if not self.__redirect:
             bold = style.startswith("*")
             color = style[1:] if bold else style
             if color == "red":
@@ -328,7 +340,7 @@ def main(argv):
     setting_file = os.path.join(app_dir, "pokalint_setting.json")
     inspector = Inspector(setting_file)
     report = inspector.inspect(lines)
-    report.output(sys.stdout.isatty())
+    report.output(not sys.stdout.isatty())
 
     log_dir = os.path.join(app_dir, "log")
     if os.path.isdir(log_dir):
