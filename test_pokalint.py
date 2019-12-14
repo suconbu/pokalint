@@ -17,9 +17,10 @@ def test_pattern():
 def test_inspector(capfd):
     i = Inspector("./pokalint_setting.json")
     assert(i)
-    with open("./test_gitdiff.txt") as f:
-        r = i.inspect(f.readlines())
-    assert(r)
+    with open("./diff_git.txt") as f:
+        i.inspect(f.readlines())
+    r = i.report
+    assert(r is not None)
     assert(r.added_block_count == 9)
     assert(r.deleted_block_count == 2)
     assert(r.replaced_block_count == 1)
@@ -32,7 +33,7 @@ def test_inspector(capfd):
     verify_output(o)
 
 def test_main(capfd):
-    main(["pokalint.py", "./test_gitdiff.txt"])
+    main(["pokalint.py", "./diff_git.txt"], stdin_isatty=True, stdout_isatty=False)
     o, e = capfd.readouterr()
     verify_output(o)
 

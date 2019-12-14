@@ -4,7 +4,9 @@ import os
 import re
 import sys
 import math
+import glob
 import json
+import argparse
 import datetime
 import concolor
 import unicodedata
@@ -66,23 +68,17 @@ class Inspector(object):
         self.warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
         self.current_filename = ""
         self.current_lineno = 0
-        self.report = None
+        self.__report = Report(
+            self.counter_patterns_by_category.keys(),
+            self.warning_patterns_by_category.keys())
         self.__funccall_re = re.compile(r"(\w+)\s*\(")
         self.__keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
 
-    def __get_patterns_by_category(self, categories):
-        patterns = OrderedDict()
-        for category in categories.keys():
-            patterns[category] = self.__get_patterns(categories[category])
-        return patterns
-
-    def __get_patterns(self, array):
-        return list(map(Pattern, array))
+    @property
+    def report(self):
+        return self.__report
 
     def inspect(self, lines):
-        self.report = Report(
-            self.counter_patterns_by_category.keys(),
-            self.warning_patterns_by_category.keys())
         filename_re = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
         lineno_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
@@ -96,7 +92,7 @@ class Inspector(object):
                     self.current_filename = None
                 else:
                     self.current_filename = filename_re.match(line).group(1)
-                self.report.increase_file_count(os.path.splitext(filename)[1])
+                self.__report.increase_file_count(os.path.splitext(filename)[1])
             elif line.startswith("@@"):
                 add_count = 0
                 self.current_lineno = int(lineno_re.match(line).group(1))
@@ -111,19 +107,21 @@ class Inspector(object):
                 else:
                     if 0 < add_count:
                         if delete_count == 0:
-                            self.report.pure_added_line_count += add_count
-                            self.report.added_block_count += 1
+                            self.__report.pure_added_line_count += add_count
+                            self.__report.added_block_count += 1
                         else:
-                            self.report.replace_added_line_count += add_count
-                            self.report.replace_deleted_line_count += delete_count
-                            self.report.replaced_block_count += 1
+                            self.__report.replace_added_line_count += add_count
+                            self.__report.replace_deleted_line_count += delete_count
+                            self.__report.replaced_block_count += 1
                     elif 0 < delete_count:
-                        self.report.pure_deleted_line_count += delete_count
-                        self.report.deleted_block_count += 1
+                        self.__report.pure_deleted_line_count += delete_count
+                        self.__report.deleted_block_count += 1
                     add_count = 0
                     delete_count = 0
                 self.current_lineno += 1
-        return self.report
+
+    def add_skipfile(self, file, message):
+        self.report.skipfiles[os.path.abspath(file)] = message
 
     def __inspect_line(self, line):
         for category in self.warning_patterns_by_category:
@@ -137,17 +135,26 @@ class Inspector(object):
                     entry.end = position[1]
                     entry.text = line.replace("\t", " ")
                     entry.pattern = pattern
-                    self.report.add_entry(category, entry)
+                    self.__report.add_entry(category, entry)
         for category in self.counter_patterns_by_category:
             for pattern in self.counter_patterns_by_category[category]:
                 position = pattern.match(line)
                 if position:
-                    self.report.increase_keyword_count(category)
+                    self.__report.increase_keyword_count(category)
         matches = self.__funccall_re.findall(line)
         if matches:
             for match in matches:
                 if not match in self.__keywords:
-                    self.report.increase_funccall_count(match)
+                    self.__report.increase_funccall_count(match)
+
+    def __get_patterns_by_category(self, categories):
+        patterns = OrderedDict()
+        for category in categories.keys():
+            patterns[category] = self.__get_patterns(categories[category])
+        return patterns
+
+    def __get_patterns(self, array):
+        return list(map(Pattern, array))
 
 class Report(object):
     def __init__(self, counter_categories, warning_categories):
@@ -158,13 +165,14 @@ class Report(object):
         self.added_block_count = 0
         self.deleted_block_count = 0
         self.replaced_block_count = 0
+        self.skipfiles = {}
         self.__file_count_by_extension = {}
         self.__keyword_count_by_category = OrderedDict.fromkeys(counter_categories, 0)
         self.__entries_by_category = OrderedDict()
         for category in warning_categories:
             self.__entries_by_category[category] = []
         self.__funccall_count_by_name = {}
-        self.__redirect = False
+        self.__totty = True
         self.__bar_max = 80
 
     def increase_file_count(self, extension):
@@ -179,18 +187,29 @@ class Report(object):
     def add_entry(self, cateogry, entry):
         self.__entries_by_category[cateogry].append(entry)
 
-    def output(self, redirect):
-        self.__redirect = redirect
+    def output(self, totty):
+        self.__totty = totty
         self.__print()
-        self.__print("-" * 40)
+        self.__print_separator()
         self.__print()
+        self.output_skipfiles()
         self.output_warning_details()
-        self.__print("-" * 40)
+        self.__print_separator()
         print()
         self.output_summary()
         self.output_counts()
         self.output_funccalls()
         self.output_warnings()
+
+    def output_skipfiles(self):
+        count = len(self.skipfiles)
+        if 0 < count:
+            self.__print("# Skipped ({0})".format(count), "red")
+            self.__print()
+            for file in self.skipfiles:
+                message = self.skipfiles[file]
+                self.__print("  * {0} - {1}".format(file, message))
+            self.__print()
 
     def output_warning_details(self):
         for category in self.__entries_by_category:
@@ -219,7 +238,7 @@ class Report(object):
     def output_summary(self):
         self.__print("# Summary", "cyan")
         self.__print()
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
 
         total_file_count = sum(self.__file_count_by_extension.values())
         self.__print("  * Changed file ({0}):".format(total_file_count))
@@ -244,13 +263,13 @@ class Report(object):
             self.pure_deleted_line_count,
             self.replace_deleted_line_count))
 
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         self.__print()
 
     def output_counts(self):
         self.__print("# Counts", "cyan")
         self.__print()
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda k : len(k)))
         max_count = max(self.__keyword_count_by_category.values())
         bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
@@ -260,26 +279,26 @@ class Report(object):
                 category, " " * (max_width - len_on_screen(category)),
                 count,
                 "#" * math.ceil(count * bar_scale)))
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         self.__print()
 
     def output_funccalls(self):
         self.__print("# Function calls", "cyan")
         self.__print()
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         sorted_list = list(self.__funccall_count_by_name.items())
         sorted_list.sort(key = itemgetter(0), reverse = False)
         sorted_list.sort(key = itemgetter(1), reverse = True)
         max_width = len_on_screen(max(self.__funccall_count_by_name, key = lambda k : len(k)))
         for name, count in sorted_list:
             self.__print("  * {0}{1} - {2:4} {3}".format(name, " " * (max_width - len_on_screen(name)), count, "#" * count))
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         self.__print()
 
     def output_warnings(self):
         self.__print("# Warnings", "cyan")
         self.__print()
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         max_width = len_on_screen(max(self.__entries_by_category, key = lambda k : len(k)))
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
@@ -287,7 +306,7 @@ class Report(object):
             self.__print(
                 "  * {0}{1} - {2:3} {3}".format(category, " " * (max_width - len_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
-        self.__redirect and self.__print("```")
+        self.__totty or self.__print("```")
         self.__print()
 
 
@@ -310,7 +329,7 @@ class Report(object):
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
     def __print(self, string = "", style = "", newline = True):
-        if not self.__redirect:
+        if self.__totty:
             bold = style.startswith("*")
             color = style[1:] if bold else style
             if color == "red":
@@ -325,26 +344,48 @@ class Report(object):
             s = string
         print(s, end = "\n" if newline else "")
 
+    def __print_separator(self, length = 40):
+        self.__print("-" * length)
+
 class Entry(object):
     pass
 
-def main(argv):
-    app_dir = os.path.dirname(__file__)
-    lines = []
-    if 1 < len(argv):
-        with open(argv[1]) as f:
-            lines = f.readlines()
-    else:
-        lines = sys.stdin.readlines()
+def travarse_files(paths, recursive, func):
+    for path in paths:
+        if os.path.isfile(path):
+            func(path)
+        else:
+            if os.path.isdir(path) and recursive:
+                travarse_files(glob.glob(os.path.join(path, "*")), recursive, func)
 
+def inspect_file(inspector, file, redirect, verbose):
+    try:
+        with open(file, mode="r", encoding="utf-8") as f:
+            if verbose:
+                print(os.path.abspath(file))
+            inspector.inspect(f.readlines())
+    except:
+        inspector.add_skipfile(file, sys.exc_info()[1])
+
+def main(argv, stdin_isatty, stdout_isatty):
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("-r", dest="recursive", action="store_true", required=False, default=False)
+    ap.add_argument("-v", dest="verbose", action="store_true", required=False, default=False)
+    ap.add_argument("files", metavar="FILE", nargs="*")
+    args = ap.parse_args(args=argv[1:])
+
+    app_dir = os.path.dirname(__file__)
     setting_file = os.path.join(app_dir, "pokalint_setting.json")
     inspector = Inspector(setting_file)
-    report = inspector.inspect(lines)
-    report.output(not sys.stdout.isatty())
+    if not stdin_isatty:
+        inspector.inspect(sys.stdin.readlines())
+    else:
+        travarse_files(args.files, args.recursive, lambda f: inspect_file(inspector, f, stdout_isatty, args.verbose))
+    inspector.report.output(stdout_isatty)
 
     log_dir = os.path.join(app_dir, "log")
     if os.path.isdir(log_dir):
-        report.write_log(log_dir)
+        inspector.report.write_log(log_dir)
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main(sys.argv, stdin_isatty=sys.stdin.isatty(), stdout_isatty=sys.stdout.isatty())
