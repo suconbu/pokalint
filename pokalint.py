@@ -289,9 +289,10 @@ class Report(object):
         sorted_list = list(self.__funccall_count_by_name.items())
         sorted_list.sort(key = itemgetter(0), reverse = False)
         sorted_list.sort(key = itemgetter(1), reverse = True)
-        max_width = len_on_screen(max(self.__funccall_count_by_name, key = lambda k : len(k)))
-        for name, count in sorted_list:
-            self.__print("  * {0}{1} - {2:4} {3}".format(name, " " * (max_width - len_on_screen(name)), count, "#" * count))
+        if 0 < len(sorted_list):
+            max_width = len_on_screen(max(self.__funccall_count_by_name, key = lambda k : len(k)))
+            for name, count in sorted_list:
+                self.__print("  * {0}{1} - {2:4} {3}".format(name, " " * (max_width - len_on_screen(name)), count, "#" * count))
         self.__totty or self.__print("```")
         self.__print()
 
