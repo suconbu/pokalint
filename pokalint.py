@@ -189,27 +189,24 @@ class Report(object):
 
     def output(self, totty):
         self.__totty = totty
-        self.__print()
         self.__print_separator()
         self.__print()
-        self.output_skipfiles()
+        if 0 < len(self.skipfiles):
+            self.output_skipfiles()
         self.output_warning_details()
         self.__print_separator()
-        print()
         self.output_summary()
         self.output_counts()
         self.output_funccalls()
         self.output_warnings()
 
     def output_skipfiles(self):
-        count = len(self.skipfiles)
-        if 0 < count:
-            self.__print("# Skipped ({0})".format(count), "red")
-            self.__print()
-            for file in self.skipfiles:
-                message = self.skipfiles[file]
-                self.__print("  * {0} - {1}".format(file, message))
-            self.__print()
+        self.__print("# Skipped ({0})".format(len(self.skipfiles)), "red")
+        self.__print()
+        for file in self.skipfiles:
+            message = self.skipfiles[file]
+            self.__print("  * {0} - {1}".format(file, message))
+        self.__print()
 
     def output_warning_details(self):
         for category in self.__entries_by_category:
@@ -310,7 +307,6 @@ class Report(object):
         self.__totty or self.__print("```")
         self.__print()
 
-
     def write_log(self, log_dir):
         now = datetime.datetime.now()
         log_path = os.path.join(log_dir, "{0:04}W{1:02}".format(now.year, now.isocalendar()[1]) + ".log")
@@ -345,11 +341,22 @@ class Report(object):
             s = string
         print(s, end = "\n" if newline else "")
 
-    def __print_separator(self, length = 40):
+    def __print_separator(self, length = 60):
         self.__print("-" * length)
 
 class Entry(object):
     pass
+
+
+def print_banner():
+    print()
+    print(" #####    ####   #    #    ##    #        #   #    #  #####")
+    print(" #    #  #    #  #   #    #  #   #        #   ##   #    #  ")
+    print(" #    #  #    #  ####    #    #  #        #   # #  #    #  ")
+    print(" #####   #    #  #  #    ######  #        #   #  # #    #  ")
+    print(" #       #    #  #   #   #    #  #        #   #   ##    #  ")
+    print(" #        ####   #    #  #    #  ######   #   #    #    #  ")
+    print()
 
 def travarse_files(paths, recursive, func):
     for path in paths:
@@ -374,6 +381,9 @@ def main(argv, stdin_isatty, stdout_isatty):
     ap.add_argument("-v", dest="verbose", action="store_true", required=False, default=False)
     ap.add_argument("files", metavar="FILE", nargs="*")
     args = ap.parse_args(args=argv[1:])
+
+    if stdout_isatty:
+        print_banner()
 
     app_dir = os.path.dirname(__file__)
     setting_file = os.path.join(app_dir, "pokalint_setting.json")
