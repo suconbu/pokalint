@@ -1,12 +1,12 @@
 {
-	"exclude-path-patterns":[
-		"/\\.txt$/i"
+	"path-patterns":[
+		"/.+\\.(c|h|cpp|hpp|cxx|hxx|cp|hp|cc|hh|c\\+\\+|h\\+\\+)$/i"
 	],
 	"counter":{
 		"if":["/(?<!else )if\\b/"],
 		"switch":["/\\bswitch\\b/"],
 		"for/while":["/\\bfor|while\\b/"],
-		"break":["/\\breturn\\b/"],
+		"break":["/\\bbreak\\b/"],
 		"continue":["/\\bcontinue\\b/"],
 		"goto":["/\\bgoto\\b/"],
 		"return":["/\\breturn\\b/"],
@@ -18,14 +18,14 @@
 		"typedef":["/\\btypedef\\b/"],
 		"printf":["/\\w*printf\\w*/"],
 		"scanf":["/\\w*scanf\\w*/"],
-		"malloc":["/\\b\\w*alloc\\w*\\b/i"],
-		"free":["/\\b\\w*free\\w*\\b/i"]
+		"malloc/new":["/\\b\\w*alloc\\b/i", "/\\bnew\\b/"],
+		"free/delete":["/\\b\\w*free\\b/i", "/\\bdelete\\b/"]
 	},
 	"warning":{
 		"Deprecated":[
 			{"pattern":"/\\bstrcpy\\b/", "message":"'{0}' is obsolete and you'd better to use 'strcpy_s'."},
 			{"pattern":"/\\bstrcmp\\b/", "message":"'{0}' is obsolete and you'd better to use 'strcmp_s'."},
-			{"pattern":"/\\bato\\w{1,2}\\b/", "message":"'{0}' is obsolete and you'd better to use 'strtol' etc."},
+			{"pattern":"/\\bato(i|l{1,2}|f)\\b/", "message":"'{0}' is obsolete and you'd better to use 'strtol' etc."},
 			{"pattern":"/=\\s*{\\s*0\\s*}/", "message":"You'd better to zero-initialize with '= {}'."}
 		],
 		"Typo":[

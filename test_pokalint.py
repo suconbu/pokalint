@@ -8,6 +8,7 @@ test_diff_files = [
     "test/diff_git_sjis.txt",
     "test/diff_git_utf16.txt"
 ]
+test_normal_file = "test/helloworld.c"
 
 def test_pattern():
     p = Pattern("hoge")
@@ -42,8 +43,8 @@ def test_inspector(capfd):
 def test_main_stdin(capfd):
     stdin = None
     with open(test_diff_files[0], mode="r", encoding="utf-8") as f:
-        stdin = f.readlines()
-    main(["pokalint.py"], stdin)
+        lines = f.readlines()
+    main(["pokalint.py"], lines)
     o, e = capfd.readouterr()
     verify_output(o, e, [4, 2, 3])
 
@@ -68,9 +69,28 @@ def test_main_args4(capfd):
     verify_output(o, e, [8, 4, 6], skipped=True, notfound=True)
 
 def test_main_args5(capfd):
-    main(["pokalint.py", "concolor.py"])
+    with open(test_normal_file, mode="r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    main(["pokalint.py", "-a"], lines)
     o, e = capfd.readouterr()
     verify_output(o, e, [1, 0, 0])
+
+    main(["pokalint.py", "-a", test_normal_file])
+    o, e = capfd.readouterr()
+    verify_output(o, e, [1, 0, 0])
+
+def test_main_args6(capfd):
+    with open(test_normal_file, mode="r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    main(["pokalint.py"], lines)
+    o, e = capfd.readouterr()
+    verify_output(o, e, [0, 0, 0])
+
+    main(["pokalint.py", test_normal_file])
+    o, e = capfd.readouterr()
+    verify_output(o, e, [0, 0, 0], skipped=True)
 
 def verify_output(o, e, counts, verbose=False, skipped=False, notfound=False):
     if skipped:
@@ -84,12 +104,12 @@ def verify_output(o, e, counts, verbose=False, skipped=False, notfound=False):
         assert(len(e) == 0)
 
     if notfound:
-        assert("File not found" in o)
+        assert("No such file or directory" in o)
     else:
-        assert("File not found" not in o)
+        assert("No such file or directory" not in o)
 
     if 0 < counts[0]:
-        assert("if        -    {0} {1}".format(counts[0], "#" * counts[0]) in o)
+        assert("if          -    {0} {1}".format(counts[0], "#" * counts[0]) in o)
     if 0 < counts[1]:
         assert("atoi        -    {0} {1}".format(counts[1], "#" * counts[1]) in o)
     if 0 < counts[2]:

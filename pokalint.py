@@ -63,7 +63,7 @@ class Pattern(object):
 class Inspector(object):
     def __init__(self, setting_path):
         setting_root = json.load(open(setting_path), object_pairs_hook = OrderedDict)
-        self.__exclude_path_patterns = self.__get_patterns(setting_root["exclude-path-patterns"])
+        self.__path_patterns = self.__get_patterns(setting_root["path-patterns"])
         self.__counter_patterns_by_category = self.__get_patterns_by_category(setting_root["counter"])
         self.__warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
         self.__current_filename = ""
@@ -78,14 +78,27 @@ class Inspector(object):
     def report(self):
         return self.__report
 
-    def inspect(self, lines, path = None):
-        if self.__is_diff(lines):
-            self.__inspect_diff(lines)
-        else:
-            self.__inspect_full(lines, path)
+    def inspect(self, lines = None, path = None, all_of_file = False):
+        if not lines:
+            try:
+                if not all_of_file or Pattern.match_any(self.__path_patterns, path):
+                    with open(path, mode="r", encoding="utf-8") as f:
+                        lines = f.readlines()
+            except:
+                self.report.skippedfiles[os.path.abspath(path)] = sys.exc_info()[1]
 
-    def add_skipfile(self, file, message):
-        self.report.skipfiles[os.path.abspath(file)] = message
+        if not lines:
+            return False
+
+        if all_of_file:
+            self.__inspect_all(lines, path)
+        else:
+            if self.__is_diff(lines):
+                self.__inspect_diff(lines)
+            else:
+                if path:
+                    self.report.skippedfiles[os.path.abspath(path)] = "Cannot be parse as a diff file"
+        return True
 
     def __is_diff(self, lines):
         for i in range(min(3, len(lines) - 1)):
@@ -93,13 +106,17 @@ class Inspector(object):
                 return True
         return False
 
-    def __inspect_full(self, lines, path):
-        self.__report.increase_file_count(os.path.splitext(path)[1])
-        self.__current_filename = os.path.abspath(path)
+    def __inspect_all(self, lines, path):
+        if path:
+            self.__report.increase_file_count(os.path.splitext(path)[1])
+            self.__current_filename = os.path.abspath(path)
+        else:
+            self.__current_filename = None
         self.__current_lineno = 1
         for line in lines:
             self.__inspect_line(line.rstrip("\r\n"))
             self.__current_lineno += 1
+        self.__report.non_diff_line_count += len(lines)
 
     def __inspect_diff(self, lines):
         filename_re = re.compile(r"^\+\+\+ +(?:b/)?(.+\.\w+).*")
@@ -111,11 +128,11 @@ class Inspector(object):
                 pass
             elif line.startswith("+++"):
                 filename = filename_re.match(line).group(1)
-                if Pattern.match_any(self.__exclude_path_patterns, filename):
-                    self.__current_filename = None
-                else:
+                if Pattern.match_any(self.__path_patterns, filename):
                     self.__current_filename = filename_re.match(line).group(1)
-                self.__report.increase_file_count(os.path.splitext(filename)[1])
+                    self.__report.increase_file_count(os.path.splitext(filename)[1])
+                else:
+                    self.__current_filename = None
             elif line.startswith("@@"):
                 add_count = 0
                 self.__current_lineno = int(lineno_re.match(line).group(1))
@@ -178,6 +195,7 @@ class Inspector(object):
 
 class Report(object):
     def __init__(self, counter_categories, warning_categories):
+        self.non_diff_line_count = 0
         self.pure_added_line_count = 0
         self.pure_deleted_line_count = 0
         self.replace_added_line_count = 0
@@ -185,7 +203,7 @@ class Report(object):
         self.added_block_count = 0
         self.deleted_block_count = 0
         self.replaced_block_count = 0
-        self.skipfiles = {}
+        self.skippedfiles = {}
         self.__file_count_by_extension = {}
         self.__keyword_count_by_category = OrderedDict.fromkeys(counter_categories, 0)
         self.__entries_by_category = OrderedDict()
@@ -211,8 +229,8 @@ class Report(object):
         self.__to_tty = to_tty
         self.__print_separator()
         self.__print()
-        if 0 < len(self.skipfiles):
-            self.output_skipfiles()
+        if 0 < len(self.skippedfiles):
+            self.output_skippedfiles()
             self.__print_separator()
             self.__print()
         if self.output_warning_details():
@@ -223,11 +241,11 @@ class Report(object):
         self.output_funccalls()
         self.output_warnings()
 
-    def output_skipfiles(self):
-        self.__print("# Skipped ({0})".format(len(self.skipfiles)), "red")
+    def output_skippedfiles(self):
+        self.__print("# Skipped ({0})".format(len(self.skippedfiles)), "red")
         self.__print()
-        for file in self.skipfiles:
-            message = self.skipfiles[file]
+        for file in self.skippedfiles:
+            message = self.skippedfiles[file]
             self.__print("  * {0} - {1}".format(file, message))
         self.__print()
         return True
@@ -277,7 +295,8 @@ class Report(object):
 
         total_added = self.pure_added_line_count + self.replace_added_line_count
         total_deleted = self.pure_deleted_line_count + self.replace_deleted_line_count
-        self.__print("  * Line ({0}):".format(total_added + total_deleted))
+        total_line_count = total_added + total_deleted + self.non_diff_line_count
+        self.__print("  * Line ({0}):".format(total_line_count))
         self.__print("    * Add        - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
             total_added,
             self.pure_added_line_count,
@@ -286,13 +305,15 @@ class Report(object):
             total_deleted,
             self.pure_deleted_line_count,
             self.replace_deleted_line_count))
+        if 0 < self.non_diff_line_count:
+            self.__print("    * -          - {0:4} lines".format(self.non_diff_line_count))
 
         self.__to_tty or self.__print("```")
         self.__print()
         return True
 
     def output_counts(self):
-        self.__print("# Word frequency", "cyan")
+        self.__print("# Counts", "cyan")
         self.__print()
         self.__to_tty or self.__print("```")
         max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda k : len(k)))
@@ -402,32 +423,24 @@ def print_banner():
 
 def travarse_files(paths, recursive, func):
     for path in paths:
-        if not os.path.exists(path):
-            func(path, False)
-        if os.path.isfile(path):
-            func(path, True)
+        if os.path.isfile(path) or not os.path.exists(path):
+            func(path)
         else:
             if os.path.isdir(path) and recursive:
                 travarse_files(glob.glob(os.path.join(path, "*")), recursive, func)
 
-def inspect_file(inspector, path, exist, print_path):
-    if exist:
-        try:
-            with open(path, mode="r", encoding="utf-8") as f:
-                if print_path:
-                    print(os.path.abspath(path), file=sys.stderr)
-                inspector.inspect(f.readlines(), path)
-        except:
-            inspector.add_skipfile(path, sys.exc_info()[1])
-    else:
-        inspector.add_skipfile(path, "File not found")
+def inspect_file(inspector, path, print_path, all_of_file):
+    if inspector.inspect(path=path, all_of_file=all_of_file) and print_path:
+        print(os.path.abspath(path), file=sys.stderr)
 
 def main(argv, stdin = None):
     to_tty = sys.stdout.isatty()
 
     ap = argparse.ArgumentParser(add_help=False)
-    ap.add_argument("-r", dest="recursive", action="store_true", required=False, default=False)
-    ap.add_argument("-v", dest="verbose", action="store_true", required=False, default=False)
+    ap.add_argument("-r", "--recursive", dest="recursive", action="store_true", required=False, default=False)
+    ap.add_argument("-v", "--verbose", dest="verbose", action="store_true", required=False, default=False)
+    ap.add_argument("-a", "--all", dest="all", action="store_true", required=False, default=False)
+    ap.add_argument("--help", action="help")
     ap.add_argument("files", metavar="FILE", nargs="*")
     args = ap.parse_args(args=argv[1:])
 
@@ -438,9 +451,12 @@ def main(argv, stdin = None):
     setting_file = os.path.join(app_dir, "pokalint_setting.json")
     inspector = Inspector(setting_file)
     if stdin:
-        inspector.inspect(stdin)
+        inspector.inspect(lines=stdin, all_of_file=args.all)
     else:
-        travarse_files(args.files, args.recursive, lambda f, e: inspect_file(inspector, f, e, args.verbose))
+        travarse_files(
+            args.files,
+            args.recursive,
+            lambda p: inspect_file(inspector, path=p, print_path=args.verbose, all_of_file=args.all))
         if args.verbose:
             print()
     inspector.report.output(to_tty)
