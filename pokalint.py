@@ -98,7 +98,7 @@ class Inspector(object):
         self.__current_filename = os.path.abspath(path)
         self.__current_lineno = 1
         for line in lines:
-            self.__inspect_line(line)
+            self.__inspect_line(line.rstrip("\r\n"))
             self.__current_lineno += 1
 
     def __inspect_diff(self, lines):
@@ -126,7 +126,7 @@ class Inspector(object):
                 elif line.startswith("+"):
                     add_count += 1
                     if self.__current_filename:
-                        self.__inspect_line(line[1:].rstrip("\n"))
+                        self.__inspect_line(line[1:].rstrip("\r\n"))
                 else:
                     if 0 < add_count:
                         if delete_count == 0:
