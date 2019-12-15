@@ -63,14 +63,14 @@ class Pattern(object):
 class Inspector(object):
     def __init__(self, setting_path):
         setting_root = json.load(open(setting_path), object_pairs_hook = OrderedDict)
-        self.exclude_path_patterns = self.__get_patterns(setting_root["exclude-path-patterns"])
-        self.counter_patterns_by_category = self.__get_patterns_by_category(setting_root["counter"])
-        self.warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
-        self.current_filename = ""
-        self.current_lineno = 0
+        self.__exclude_path_patterns = self.__get_patterns(setting_root["exclude-path-patterns"])
+        self.__counter_patterns_by_category = self.__get_patterns_by_category(setting_root["counter"])
+        self.__warning_patterns_by_category = self.__get_patterns_by_category(setting_root["warning"])
+        self.__current_filename = ""
+        self.__current_lineno = 0
         self.__report = Report(
-            self.counter_patterns_by_category.keys(),
-            self.warning_patterns_by_category.keys())
+            self.__counter_patterns_by_category.keys(),
+            self.__warning_patterns_by_category.keys())
         self.__funccall_re = re.compile(r"(\w+)\s*\(")
         self.__keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
 
@@ -78,7 +78,30 @@ class Inspector(object):
     def report(self):
         return self.__report
 
-    def inspect(self, lines):
+    def inspect(self, lines, path = None):
+        if self.__is_diff(lines):
+            self.__inspect_diff(lines)
+        else:
+            self.__inspect_full(lines, path)
+
+    def add_skipfile(self, file, message):
+        self.report.skipfiles[os.path.abspath(file)] = message
+
+    def __is_diff(self, lines):
+        for i in range(min(3, len(lines) - 1)):
+            if lines[i].startswith("--- ") and lines[i + 1].startswith("+++ "):
+                return True
+        return False
+
+    def __inspect_full(self, lines, path):
+        self.__report.increase_file_count(os.path.splitext(path)[1])
+        self.__current_filename = os.path.abspath(path)
+        self.__current_lineno = 1
+        for line in lines:
+            self.__inspect_line(line)
+            self.__current_lineno += 1
+
+    def __inspect_diff(self, lines):
         filename_re = re.compile(r"^\+\+\+ +(?:b/)?(.+\.\w+).*")
         lineno_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
@@ -88,21 +111,21 @@ class Inspector(object):
                 pass
             elif line.startswith("+++"):
                 filename = filename_re.match(line).group(1)
-                if Pattern.match_any(self.exclude_path_patterns, filename):
-                    self.current_filename = None
+                if Pattern.match_any(self.__exclude_path_patterns, filename):
+                    self.__current_filename = None
                 else:
-                    self.current_filename = filename_re.match(line).group(1)
+                    self.__current_filename = filename_re.match(line).group(1)
                 self.__report.increase_file_count(os.path.splitext(filename)[1])
             elif line.startswith("@@"):
                 add_count = 0
-                self.current_lineno = int(lineno_re.match(line).group(1))
+                self.__current_lineno = int(lineno_re.match(line).group(1))
                 delete_count = 0
             else:
                 if line.startswith("-"):
                     delete_count += 1
                 elif line.startswith("+"):
                     add_count += 1
-                    if self.current_filename:
+                    if self.__current_filename:
                         self.__inspect_line(line[1:].rstrip("\n"))
                 else:
                     if 0 < add_count:
@@ -118,26 +141,23 @@ class Inspector(object):
                         self.__report.deleted_block_count += 1
                     add_count = 0
                     delete_count = 0
-                self.current_lineno += 1
-
-    def add_skipfile(self, file, message):
-        self.report.skipfiles[os.path.abspath(file)] = message
+                self.__current_lineno += 1
 
     def __inspect_line(self, line):
-        for category in self.warning_patterns_by_category:
-            for pattern in self.warning_patterns_by_category[category]:
+        for category in self.__warning_patterns_by_category:
+            for pattern in self.__warning_patterns_by_category[category]:
                 position = pattern.match(line)
                 if position:
                     entry = Entry()
-                    entry.filename = self.current_filename
-                    entry.lineno = self.current_lineno
+                    entry.filename = self.__current_filename
+                    entry.lineno = self.__current_lineno
                     entry.start = position[0]
                     entry.end = position[1]
                     entry.text = line.replace("\t", " ")
                     entry.pattern = pattern
                     self.__report.add_entry(category, entry)
-        for category in self.counter_patterns_by_category:
-            for pattern in self.counter_patterns_by_category[category]:
+        for category in self.__counter_patterns_by_category:
+            for pattern in self.__counter_patterns_by_category[category]:
                 position = pattern.match(line)
                 if position:
                     self.__report.increase_keyword_count(category)
@@ -197,6 +217,7 @@ class Report(object):
             self.__print()
         self.output_warning_details()
         self.__print_separator()
+        self.__print()
         self.output_summary()
         self.output_counts()
         self.output_funccalls()
@@ -290,8 +311,14 @@ class Report(object):
         sorted_list.sort(key = itemgetter(1), reverse = True)
         if 0 < len(sorted_list):
             max_width = len_on_screen(max(self.__funccall_count_by_name, key = lambda k : len(k)))
+            max_width = min(30, max_width)
+            max_count = max(sorted_list, key = lambda t: t[1])[1]
+            bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
             for name, count in sorted_list:
-                self.__print("  * {0}{1} - {2:4} {3}".format(name, " " * (max_width - len_on_screen(name)), count, "#" * count))
+                self.__print("  * {0}{1} - {2:4} {3}".format(
+                    name, " " * (max_width - len_on_screen(name)),
+                    count,
+                    "#" * math.ceil(count * bar_scale)))
         self.__totty or self.__print("```")
         self.__print()
 
@@ -376,17 +403,17 @@ def travarse_files(paths, recursive, func):
             if os.path.isdir(path) and recursive:
                 travarse_files(glob.glob(os.path.join(path, "*")), recursive, func)
 
-def inspect_file(inspector, file, exist, print_path):
+def inspect_file(inspector, path, exist, print_path):
     if exist:
         try:
-            with open(file, mode="r", encoding="utf-8") as f:
+            with open(path, mode="r", encoding="utf-8") as f:
                 if print_path:
-                    print(os.path.abspath(file))
-                inspector.inspect(f.readlines())
+                    print(os.path.abspath(path), file=sys.stderr)
+                inspector.inspect(f.readlines(), path)
         except:
-            inspector.add_skipfile(file, sys.exc_info()[1])
+            inspector.add_skipfile(path, sys.exc_info()[1])
     else:
-        inspector.add_skipfile(file, "File not found")
+        inspector.add_skipfile(path, "File not found")
 
 def main(argv, stdin = None):
     ap = argparse.ArgumentParser(add_help=False)

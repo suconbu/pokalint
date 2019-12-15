@@ -37,8 +37,7 @@ def test_inspector(capfd):
     assert(r.replace_deleted_line_count == 1)
     r.output(False)
     o, e = capfd.readouterr()
-    verify_output(o, multiply=1)
-    assert(not e)
+    verify_output(o, e, [4, 2, 3])
 
 def test_main_stdin(capfd):
     stdin = None
@@ -46,49 +45,52 @@ def test_main_stdin(capfd):
         stdin = f.readlines()
     main(["pokalint.py"], stdin)
     o, e = capfd.readouterr()
-    verify_output(o, multiply=1)
-    assert(not e)
+    verify_output(o, e, [4, 2, 3])
 
 def test_main_args1(capfd):
     main(["pokalint.py", test_diff_files[0]])
     o, e = capfd.readouterr()
-    verify_output(o, multiply=1)
-    assert(not e)
+    verify_output(o, e, [4, 2, 3])
 
 def test_main_args2(capfd):
     main(["pokalint.py"] + test_diff_files)
     o, e = capfd.readouterr()
-    verify_output(o, multiply=2, skipped=True)
-    assert(not e)
+    verify_output(o, e, [8, 4, 6], skipped=True)
 
 def test_main_args3(capfd):
     main(["pokalint.py", "-v"] + test_diff_files)
     o, e = capfd.readouterr()
-    verify_output(o, multiply=2, verbose=True, skipped=True)
-    assert(not e)
+    verify_output(o, e, [8, 4, 6], verbose=True, skipped=True)
 
 def test_main_args4(capfd):
     main(["pokalint.py", "notfound.txt"] + test_diff_files)
     o, e = capfd.readouterr()
-    verify_output(o, multiply=2, skipped=True, notfound=True)
-    assert(not e)
+    verify_output(o, e, [8, 4, 6], skipped=True, notfound=True)
 
-def verify_output(o, multiply, verbose=False, skipped=False, notfound=False):
+def test_main_args5(capfd):
+    main(["pokalint.py", "concolor.py"])
+    o, e = capfd.readouterr()
+    verify_output(o, e, [1, 0, 0])
+
+def verify_output(o, e, counts, verbose=False, skipped=False, notfound=False):
     if skipped:
         assert("# Skipped" in o)
     else:
         assert("# Skipped" not in o)
 
     if verbose:
-        assert("diff_git.txt" in o)
+        assert("diff_git.txt" in e)
     else:
-        assert("diff_git.txt" not in o)
+        assert(len(e) == 0)
 
     if notfound:
         assert("File not found" in o)
     else:
         assert("File not found" not in o)
 
-    assert("if        -    {0} {1}".format(4 * multiply, "####" * multiply) in o)
-    assert("atoi        -    {0} {1}".format(2 * multiply, "##" * multiply) in o)
-    assert("Deprecated -   {0} {1}".format(3 * multiply, "###" * multiply) in o)
+    if 0 < counts[0]:
+        assert("if        -    {0} {1}".format(counts[0], "#" * counts[0]) in o)
+    if 0 < counts[1]:
+        assert("atoi        -    {0} {1}".format(counts[1], "#" * counts[1]) in o)
+    if 0 < counts[2]:
+        assert("Deprecated -   {0} {1}".format(counts[2], "#" * counts[2]) in o)
