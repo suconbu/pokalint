@@ -3,10 +3,10 @@
 from pokalint import *
 
 test_diff_files = [
-    "./diff_git.txt",
-    "./diff_git_bom.txt",
-    "./diff_git_sjis.txt",
-    "./diff_git_utf16.txt"
+    "test/diff_git.txt",
+    "test/diff_git_bom.txt",
+    "test/diff_git_sjis.txt",
+    "test/diff_git_utf16.txt"
 ]
 
 def test_pattern():

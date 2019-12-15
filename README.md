@@ -20,17 +20,17 @@ pokalint.py [SETTING-FILE]
 
 src/hoge.cpp:35
    atoi("1");
-   ^^^^
+   ^~~~
 
 src/hoge.cpp:36
    atoll("10");
-   ^^^^^
+   ^~~~
 
 # Typo - NOK:1
 
 src/hoge.h:33
   int chackColor(const char* color);
-      ^^^^^
+      ^~~~
 ```
 
 # Setting file
