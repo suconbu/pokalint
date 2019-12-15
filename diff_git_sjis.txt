@@ -1,0 +1,142 @@
+diff --git a/BACKERS.txt b/BACKERS.txt
+index d34268c..e612bda 100644
+--- a/BACKERS.txt
++++ b/BACKERS.txt
+@@ -1,5 +1,8 @@
+ Backers [KickStarter, etc.]
+ ===========================
++
++HOGEEEEE HOGGGEE ZANTEI
++
+ Mark Karpeles	http://www.tibanne.com/	PHP can do stuff!
+ 
+ -------
+diff --git a/lib/src/apngasm.cpp b/lib/src/apngasm.cpp
+index 07434bd..0c2054e 100644
+--- a/lib/src/apngasm.cpp
++++ b/lib/src/apngasm.cpp
+@@ -25,8 +25,27 @@ namespace {
+ 
+   typedef struct { unsigned int num; unsigned char r, g, b, a; } COLORS;
+ 
++hoge(moge())
++  //todo: ‚Ù‚°‚Ù‚°‚°‚°‚°
++  //Žb’è ‚Ù‚°‚°‚°
++  		// ‚±‚ê‚ÍŽb’è‚Å‚·  
+   apngasm::listener::APNGAsmListener defaultListener;
+ 
++  int chackColor(const void* color)
++  {
++  	atoi("1");
++  	atoll("10");
++	for (int n = 0; n < 100; ++n) {
++		if (n == 0) {
++			n += 10;
++		} else if (n == 5) {
++			void* p = calloc(100);
++		} else {
++			free(p)
++		}
++	}
++    return 0;
++  }
++
+   int compareColors(const void *arg1, const void *arg2)
+   {
+     if ( ((COLORS*)arg1)->a != ((COLORS*)arg2)->a )
+@@ -50,8 +69,6 @@ namespace apngasm {
+ 
+   namespace
+   {
+-
+-    // Get file path vector.
+     const std::vector<std::string>& getFiles(const std::string& filepath)
+     {
+       static std::vector<std::string> files;
+@@ -59,7 +76,6 @@ namespace apngasm {
+       boost::filesystem::path nativePath(filepath);
+       nativePath.make_preferred();
+ 
+-      // filepath is current directory.
+       if( !nativePath.has_parent_path() )
+       {
+         const std::string currentDirPath = "." + std::string(1, boost::filesystem::path::preferred_separator);
+@@ -150,6 +166,7 @@ namespace apngasm {
+   // Returns the vector of frames.
+   const std::vector<APNGFrame>& APNGAsm::getFrames() const
+   {
++  	printf("hello");
+     return _frames;
+   }
+ 
+@@ -177,7 +194,7 @@ namespace apngasm {
+ 
+     for (size_t n = 0; n < _frames.size(); ++n)
+     {
+-      delete[] _frames[n]._pixels;
++      delete[] _frames[n]._pixels + 100;
+       delete[] _frames[n]._rows;
+     }
+     _frames.clear();
+@@ -190,6 +207,11 @@ namespace apngasm {
+     reset();
+   }
+ 
++  void APNGAsm::Hoge()
++  {
++    return;
++  }
++
+   //Adds a frame from a file
+   //Returns the frame number in the frame vector
+   //Uses default delay of 10ms if not specified
+@@ -2290,3 +2312,4 @@ namespace apngasm {
+ #endif
+ 
+ } // namespace apngasm
++//end
+diff --git a/lib/src/apngasm.h b/lib/src/apngasm.h
+index e40f459..bdcbf39 100644
+--- a/lib/src/apngasm.h
++++ b/lib/src/apngasm.h
+@@ -15,6 +15,13 @@
+ #include "apngasm-conf.h"
+ #include "apngasm-version.h"
+ 
++//TODO: HOOOOOGE
++//ToDo: WEEEEI
++
++void get_pallete()
++{
++}
++
+ /**
+  * @namespace apngasm
+  * @brief The apngasm namespace contains all functionality of apngasm.
+diff --git a/lib/src/apngframe.cpp b/lib/src/apngframe.cpp
+index c9fbe89..da7c3d8 100644
+--- a/lib/src/apngframe.cpp
++++ b/lib/src/apngframe.cpp
+@@ -8,6 +8,7 @@ namespace apngasm {
+ 
+   unsigned char* APNGFrame::pixels(unsigned char* setPixels)
+   {
++  	//@DEBUG
++#if 1
++#endif
+   	if (setPixels != NULL)
+   		_pixels  = setPixels;
+   	return _pixels;
+@@ -15,6 +16,10 @@ namespace apngasm {
+ 
+   unsigned int APNGFrame::width(unsigned int setWidth)
+   {
++  	//@test
++#ifdef _HOGE_
++  	fprintf(stdio, "hooge%d", atoi("100"));
++  	printf("hoooge");
++#endif//_HOGE_
++  	printf_s("hoooge");
+   	if (setWidth != 0)
+   		_width = setWidth;
+   	return _width;

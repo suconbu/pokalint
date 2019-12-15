@@ -4,6 +4,7 @@ image: python:3-alpine
 
 before_script:
   - pip install pytest pytest-cov
+  - mkdir log
 
 test:
   script:

@@ -193,6 +193,8 @@ class Report(object):
         self.__print()
         if 0 < len(self.skipfiles):
             self.output_skipfiles()
+            self.__print_separator()
+            self.__print()
         self.output_warning_details()
         self.__print_separator()
         self.output_summary()
@@ -311,15 +313,21 @@ class Report(object):
         now = datetime.datetime.now()
         log_path = os.path.join(log_dir, "{0:04}W{1:02}".format(now.year, now.isocalendar()[1]) + ".log")
         with open(log_path, "a") as f:
+
             summary = OrderedDict()
             summary["f"] = sum(self.__file_count_by_extension.values())
             summary["+"] = self.pure_added_line_count + self.replace_added_line_count
             summary["-"] = self.pure_deleted_line_count + self.replace_deleted_line_count
+
             warnings = OrderedDict()
             for category in self.__entries_by_category:
                 entries = self.__entries_by_category[category]
                 warnings[category] = len(entries)
-            data = {"summary":summary, "warnings": warnings}
+
+            data = OrderedDict()
+            data["summary"] = summary
+            data["warnings"] = warnings
+
             f.write("{0};{1};{2};\n".format(
                 re.sub("[-:]", "", re.sub(r"\.\d*", "", now.isoformat())),
                 os.getcwd(),
@@ -360,43 +368,51 @@ def print_banner():
 
 def travarse_files(paths, recursive, func):
     for path in paths:
+        if not os.path.exists(path):
+            func(path, False)
         if os.path.isfile(path):
-            func(path)
+            func(path, True)
         else:
             if os.path.isdir(path) and recursive:
                 travarse_files(glob.glob(os.path.join(path, "*")), recursive, func)
 
-def inspect_file(inspector, file, redirect, verbose):
-    try:
-        with open(file, mode="r", encoding="utf-8") as f:
-            if verbose:
-                print(os.path.abspath(file))
-            inspector.inspect(f.readlines())
-    except:
-        inspector.add_skipfile(file, sys.exc_info()[1])
+def inspect_file(inspector, file, exist, print_path):
+    if exist:
+        try:
+            with open(file, mode="r", encoding="utf-8") as f:
+                if print_path:
+                    print(os.path.abspath(file))
+                inspector.inspect(f.readlines())
+        except:
+            inspector.add_skipfile(file, sys.exc_info()[1])
+    else:
+        inspector.add_skipfile(file, "File not found")
 
-def main(argv, stdin_isatty, stdout_isatty):
+def main(argv, stdin = None):
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("-r", dest="recursive", action="store_true", required=False, default=False)
     ap.add_argument("-v", dest="verbose", action="store_true", required=False, default=False)
     ap.add_argument("files", metavar="FILE", nargs="*")
     args = ap.parse_args(args=argv[1:])
 
-    if stdout_isatty:
+    if sys.stdout.isatty:
         print_banner()
 
     app_dir = os.path.dirname(__file__)
     setting_file = os.path.join(app_dir, "pokalint_setting.json")
     inspector = Inspector(setting_file)
-    if not stdin_isatty:
-        inspector.inspect(sys.stdin.readlines())
+    if stdin:
+        inspector.inspect(stdin)
     else:
-        travarse_files(args.files, args.recursive, lambda f: inspect_file(inspector, f, stdout_isatty, args.verbose))
-    inspector.report.output(stdout_isatty)
+        travarse_files(args.files, args.recursive, lambda f, e: inspect_file(inspector, f, e, args.verbose))
+        if args.verbose:
+            print()
+    inspector.report.output(sys.stdout.isatty())
 
     log_dir = os.path.join(app_dir, "log")
     if os.path.isdir(log_dir):
         inspector.report.write_log(log_dir)
 
 if __name__ == "__main__":
-    main(sys.argv, stdin_isatty=sys.stdin.isatty(), stdout_isatty=sys.stdout.isatty())
+    stdin = sys.stdin.readlines() if not sys.stdin.isatty() else None
+    main(sys.argv, stdin)
