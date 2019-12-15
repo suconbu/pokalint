@@ -192,7 +192,7 @@ class Report(object):
         for category in warning_categories:
             self.__entries_by_category[category] = []
         self.__funccall_count_by_name = {}
-        self.__totty = True
+        self.__to_tty = True
         self.__bar_max = 80
 
     def increase_file_count(self, extension):
@@ -207,17 +207,17 @@ class Report(object):
     def add_entry(self, cateogry, entry):
         self.__entries_by_category[cateogry].append(entry)
 
-    def output(self, totty):
-        self.__totty = totty
+    def output(self, to_tty):
+        self.__to_tty = to_tty
         self.__print_separator()
         self.__print()
         if 0 < len(self.skipfiles):
             self.output_skipfiles()
             self.__print_separator()
             self.__print()
-        self.output_warning_details()
-        self.__print_separator()
-        self.__print()
+        if self.output_warning_details():
+            self.__print_separator()
+            self.__print()
         self.output_summary()
         self.output_counts()
         self.output_funccalls()
@@ -230,8 +230,10 @@ class Report(object):
             message = self.skipfiles[file]
             self.__print("  * {0} - {1}".format(file, message))
         self.__print()
+        return True
 
     def output_warning_details(self):
+        total_count = 0
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
             count = len(entries)
@@ -254,15 +256,17 @@ class Report(object):
                         match_word = entry.text[entry.start:entry.end]
                         self.__print("* " + entry.pattern.message.replace("{0}", match_word))
                     self.__print()
+            total_count += count
+        return bool(total_count)
 
     def output_summary(self):
         self.__print("# Summary", "cyan")
         self.__print()
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
 
         total_file_count = sum(self.__file_count_by_extension.values())
-        self.__print("  * Changed file ({0}):".format(total_file_count))
-        for ext in self.__file_count_by_extension:
+        self.__print("  * File ({0}):".format(total_file_count))
+        for ext in sorted(self.__file_count_by_extension):
             self.__print("    * {0:10} - {1:4} files".format(ext[1:], self.__file_count_by_extension[ext]))
 
         total_block_count = self.added_block_count + self.deleted_block_count + self.replaced_block_count
@@ -273,7 +277,7 @@ class Report(object):
 
         total_added = self.pure_added_line_count + self.replace_added_line_count
         total_deleted = self.pure_deleted_line_count + self.replace_deleted_line_count
-        self.__print("  * Changed line ({0}):".format(total_added + total_deleted))
+        self.__print("  * Line ({0}):".format(total_added + total_deleted))
         self.__print("    * Add        - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
             total_added,
             self.pure_added_line_count,
@@ -283,13 +287,14 @@ class Report(object):
             self.pure_deleted_line_count,
             self.replace_deleted_line_count))
 
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         self.__print()
+        return True
 
     def output_counts(self):
-        self.__print("# Counts", "cyan")
+        self.__print("# Word frequency", "cyan")
         self.__print()
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         max_width = len_on_screen(max(self.__keyword_count_by_category, key = lambda k : len(k)))
         max_count = max(self.__keyword_count_by_category.values())
         bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
@@ -299,13 +304,13 @@ class Report(object):
                 category, " " * (max_width - len_on_screen(category)),
                 count,
                 "#" * math.ceil(count * bar_scale)))
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         self.__print()
 
     def output_funccalls(self):
         self.__print("# Function calls", "cyan")
         self.__print()
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         sorted_list = list(self.__funccall_count_by_name.items())
         sorted_list.sort(key = itemgetter(0), reverse = False)
         sorted_list.sort(key = itemgetter(1), reverse = True)
@@ -319,13 +324,14 @@ class Report(object):
                     name, " " * (max_width - len_on_screen(name)),
                     count,
                     "#" * math.ceil(count * bar_scale)))
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         self.__print()
+        return bool(len(sorted_list))
 
     def output_warnings(self):
         self.__print("# Warnings", "cyan")
         self.__print()
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         max_width = len_on_screen(max(self.__entries_by_category, key = lambda k : len(k)))
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
@@ -333,8 +339,9 @@ class Report(object):
             self.__print(
                 "  * {0}{1} - {2:3} {3}".format(category, " " * (max_width - len_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
-        self.__totty or self.__print("```")
+        self.__to_tty or self.__print("```")
         self.__print()
+        return True
 
     def write_log(self, log_dir):
         now = datetime.datetime.now()
@@ -361,7 +368,7 @@ class Report(object):
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
     def __print(self, string = "", style = "", newline = True):
-        if self.__totty:
+        if self.__to_tty:
             bold = style.startswith("*")
             color = style[1:] if bold else style
             if color == "red":
@@ -416,13 +423,15 @@ def inspect_file(inspector, path, exist, print_path):
         inspector.add_skipfile(path, "File not found")
 
 def main(argv, stdin = None):
+    to_tty = sys.stdout.isatty()
+
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("-r", dest="recursive", action="store_true", required=False, default=False)
     ap.add_argument("-v", dest="verbose", action="store_true", required=False, default=False)
     ap.add_argument("files", metavar="FILE", nargs="*")
     args = ap.parse_args(args=argv[1:])
 
-    if sys.stdout.isatty:
+    if to_tty:
         print_banner()
 
     app_dir = os.path.dirname(__file__)
@@ -434,7 +443,7 @@ def main(argv, stdin = None):
         travarse_files(args.files, args.recursive, lambda f, e: inspect_file(inspector, f, e, args.verbose))
         if args.verbose:
             print()
-    inspector.report.output(sys.stdout.isatty())
+    inspector.report.output(to_tty)
 
     log_dir = os.path.join(app_dir, "log")
     if os.path.isdir(log_dir):
