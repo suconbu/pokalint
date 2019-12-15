@@ -79,7 +79,7 @@ class Inspector(object):
         return self.__report
 
     def inspect(self, lines):
-        filename_re = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
+        filename_re = re.compile(r"^\+\+\+ +(?:b/)?(.+\.\w+).*")
         lineno_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
         add_count = 0
         delete_count = 0
