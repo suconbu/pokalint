@@ -1,7 +1,8 @@
 {
-	"path-patterns":[
-		"/.+\\.(c|h|cpp|hpp|cxx|hxx|cp|hp|cc|hh|c\\+\\+|h\\+\\+)$/i"
-	],
+	"filter":{
+		"C":["/.+\\.(c|h)$/i"],
+		"C++":["/.+\\.(cpp|hpp|cxx|hxx|cp|hp|cc|hh|c\\+\\+|h\\+\\+)$/i"]
+	},
 	"counter":{
 		"if":["/(?<!else )if\\b/"],
 		"switch":["/\\bswitch\\b/"],
@@ -26,7 +27,7 @@
 			{"pattern":"/\\bstrcpy\\b/", "message":"'{0}' is obsolete and you'd better to use 'strcpy_s'."},
 			{"pattern":"/\\bstrcmp\\b/", "message":"'{0}' is obsolete and you'd better to use 'strcmp_s'."},
 			{"pattern":"/\\bato(i|l{1,2}|f)\\b/", "message":"'{0}' is obsolete and you'd better to use 'strtol' etc."},
-			{"pattern":"/=\\s*{\\s*0\\s*}/", "message":"You'd better to zero-initialize with '= {}'."}
+			{"pattern":"/=\\s*{\\s*0\\s*}/", "message":"You'd better to zero-initialize with '= {}'.", "only":["C++"]}
 		],
 		"Typo":[
 			"convart",

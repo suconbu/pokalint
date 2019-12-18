@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
 
 from pokalint import *
-
-test_diff_files = [
-    "test/diff_git.txt",
-    "test/diff_git_bom.txt",
-    "test/diff_git_sjis.txt",
-    "test/diff_git_utf16.txt"
-]
-test_normal_file = "test/helloworld.c"
+import re
+import pdb
 
 def test_pattern():
     p = Pattern("hoge")
@@ -23,10 +17,11 @@ def test_pattern():
     assert(p.match("This is HOGE."))
 
 def test_inspector(capfd):
-    i = Inspector("./pokalint_setting.json")
+    setting = Setting("./pokalint_setting.json")
+    i = Inspector(setting)
     assert(i)
-    with open(test_diff_files[0]) as f:
-        i.inspect(f.readlines())
+    with open("test/diff_git.txt") as f:
+        i.inspect_diff(f.readlines())
     r = i.report
     assert(r is not None)
     assert(r.added_block_count == 9)
@@ -40,77 +35,69 @@ def test_inspector(capfd):
     o, e = capfd.readouterr()
     verify_output(o, e, [4, 2, 3])
 
-def test_main_stdin(capfd):
-    stdin = None
-    with open(test_diff_files[0], mode="r", encoding="utf-8") as f:
+def test_main_stdin1(capfd):
+    with open("test/diff_git.txt", mode="r", encoding="utf-8") as f:
         lines = f.readlines()
     main(["pokalint.py"], lines)
     o, e = capfd.readouterr()
     verify_output(o, e, [4, 2, 3])
+
+def test_main_stdin2(capfd):
+    with open("test/helloworld.c", mode="r", encoding="utf-8") as f:
+        lines = f.readlines()
+    main(["pokalint.py"], lines)
+    o, e = capfd.readouterr()
+    assert("Invalid diff format" in e)
 
 def test_main_args1(capfd):
-    main(["pokalint.py", test_diff_files[0]])
+    main(["pokalint.py", "test/helloworld.c"])
     o, e = capfd.readouterr()
-    verify_output(o, e, [4, 2, 3])
+    verify_output(o, e, [2, 2, 2])
 
 def test_main_args2(capfd):
-    main(["pokalint.py"] + test_diff_files)
+    main(["pokalint.py", "test/helloworld.cpp"])
     o, e = capfd.readouterr()
-    verify_output(o, e, [8, 4, 6], skipped=True)
+    verify_output(o, e, [2, 2, 3])
 
 def test_main_args3(capfd):
-    main(["pokalint.py", "-v"] + test_diff_files)
+    main(["pokalint.py", "test/*"])
     o, e = capfd.readouterr()
-    verify_output(o, e, [8, 4, 6], verbose=True, skipped=True)
+    verify_output(o, e, [10, 9, 11])
 
 def test_main_args4(capfd):
-    main(["pokalint.py", "notfound.txt"] + test_diff_files)
+    main(["pokalint.py", "test/*", "-v"])
     o, e = capfd.readouterr()
-    verify_output(o, e, [8, 4, 6], skipped=True, notfound=True)
+    verify_output(o, e, [10, 9, 11])
 
 def test_main_args5(capfd):
-    with open(test_normal_file, mode="r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    main(["pokalint.py", "-a"], lines)
+    main(["pokalint.py", "test/notfound.c"])
     o, e = capfd.readouterr()
-    verify_output(o, e, [1, 0, 0])
-
-    main(["pokalint.py", "-a", test_normal_file])
-    o, e = capfd.readouterr()
-    verify_output(o, e, [1, 0, 0])
+    verify_output(o, e, [0, 0, 0], notfound=True)
 
 def test_main_args6(capfd):
-    with open(test_normal_file, mode="r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    main(["pokalint.py"], lines)
+    main(["pokalint.py", "*"])
     o, e = capfd.readouterr()
     verify_output(o, e, [0, 0, 0])
 
-    main(["pokalint.py", test_normal_file])
+def test_main_args7(capfd):
+    main(["pokalint.py", "*", "-r"])
     o, e = capfd.readouterr()
-    verify_output(o, e, [0, 0, 0], skipped=True)
+    verify_output(o, e, [10, 9, 11])
 
-def verify_output(o, e, counts, verbose=False, skipped=False, notfound=False):
-    if skipped:
-        assert("# Skipped" in o)
-    else:
-        assert("# Skipped" not in o)
-
+def verify_output(o, e, counts, verbose=False, notfound=False):
     if verbose:
         assert("diff_git.txt" in e)
     else:
-        assert(len(e) == 0)
+        assert(len(e) == 0 or "ERROR" in e)
 
     if notfound:
-        assert("No such file or directory" in o)
+        assert("No such file or directory" in e)
     else:
-        assert("No such file or directory" not in o)
+        assert("No such file or directory" not in e)
 
     if 0 < counts[0]:
-        assert("if          -    {0} {1}".format(counts[0], "#" * counts[0]) in o)
+        assert(re.search(r"if +- +{0} {1}".format(counts[0], "#" * counts[0]), o) is not None)
     if 0 < counts[1]:
-        assert("atoi        -    {0} {1}".format(counts[1], "#" * counts[1]) in o)
+        assert(re.search(r"printf +- +{0} {1}".format(counts[1], "#" * counts[1]), o) is not None)
     if 0 < counts[2]:
-        assert("Deprecated -   {0} {1}".format(counts[2], "#" * counts[2]) in o)
+        assert(re.search(r"Deprecated +- +{0} {1}".format(counts[2], "#" * counts[2]), o) is not None)
