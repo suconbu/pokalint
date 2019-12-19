@@ -20,6 +20,22 @@ def strlen_on_screen(s):
         sw += 2 if (cw == 'F' or cw == 'W' or cw == "A") else 1
     return sw
 
+class Output(object):
+    def __init__(self, file):
+        self.__file = file
+    
+    def print(self, string="", style="", newline=True):
+        if self.__file.isatty():
+            bold = style.startswith("*")
+            color = style[1:] if bold else style
+            s = concolor.get(string, color, bold)
+        else:
+            s = string
+        print(s, end=("\n" if newline else ""), file=self.__file)
+    
+    def isatty(self):
+        return self.__file.isatty()
+
 class Pattern(object):
     def __init__(self, pattern):
         if type(pattern) is str:
@@ -68,7 +84,6 @@ class PatternSet(object):
         for pattern in patterns:
             self.__patterns.append(Pattern(pattern))
 
-    # @return (pattern:Pattern, (match_start_index:int, match_end_index:int))
     def match(self, s, t=None):
         for pattern in self.__patterns:
             match = pattern.match(s, t)
@@ -86,7 +101,6 @@ class PatternGroup:
     def names(self):
         return self.__patternsets.keys()
 
-    # @return (name:string, (pattern:Pattern, (match_start_index:int, match_end_index:int)))
     def match(self, s, t = None):
         for name in self.__patternsets:
             match = self.__patternsets[name].match(s, t)
@@ -101,7 +115,6 @@ class Setting(object):
         self.counter = PatternGroup(root["counter"])
         self.warning = PatternGroup(root["warning"])
 
-import pdb
 class Inspector(object):
     def __init__(self, setting):
         self.__setting = setting
@@ -215,8 +228,8 @@ class Report(object):
         self.__keyword_count_by_category = OrderedDict.fromkeys(setting.counter.names(), 0)
         self.__entries_by_category = OrderedDict((n, []) for n in setting.warning.names())
         self.__funccall_count_by_name = {}
-        self.__to_tty = True
         self.__bar_max = 80
+        self.__output = None
 
     def increase_file_count(self, extension):
         self.__file_count_by_extension[extension] = self.__file_count_by_extension.setdefault(extension, 0) + 1
@@ -230,13 +243,14 @@ class Report(object):
     def add_entry(self, cateogry, entry):
         self.__entries_by_category[cateogry].append(entry)
 
-    def output(self, to_tty):
-        self.__to_tty = to_tty
-        self.__print_separator()
-        self.__print()
+    def output(self, output):
+        self.__output = output
+        if self.__output.isatty():
+            self.__output.print("-" * 60)
+        self.__output.print()
         if self.output_warning_details():
-            self.__print_separator()
-            self.__print()
+            self.__output.print("-" * 60)
+            self.__output.print()
         self.output_summary()
         self.output_counts()
         self.output_funccalls()
@@ -248,82 +262,82 @@ class Report(object):
             entries = self.__entries_by_category[category]
             count = len(entries)
             if 0 < count:
-                self.__print("# {0} ({1})".format(category, count), "cyan")
-                self.__print()
+                self.__output.print("# {0} ({1})".format(category, count), "cyan")
+                self.__output.print()
                 for entry in entries:
-                    self.__print("{0}:{1}  ".format(entry.filename, entry.lineno), "*")
+                    self.__output.print("{0}:{1}  ".format(entry.filename, entry.lineno), "*")
 
-                    self.__print("```")
-                    self.__print(entry.text[:entry.start], "", False)
-                    self.__print(entry.text[entry.start:entry.end], "*red", False)
-                    self.__print(entry.text[entry.end:])
+                    self.__output.print("```")
+                    self.__output.print(entry.text[:entry.start], "", False)
+                    self.__output.print(entry.text[entry.start:entry.end], "*red", False)
+                    self.__output.print(entry.text[entry.end:])
 
                     width_start = strlen_on_screen(entry.text[:entry.start])
                     width_match = strlen_on_screen(entry.text[entry.start:entry.end])
-                    self.__print(" " * width_start + "^" + "~" * (width_match - 1), "*red")
-                    self.__print("```")
+                    self.__output.print(" " * width_start + "^" + "~" * (width_match - 1), "*red")
+                    self.__output.print("```")
                     if entry.pattern.message:
                         match_word = entry.text[entry.start:entry.end]
-                        self.__print("* " + entry.pattern.message.replace("{0}", match_word))
-                    self.__print()
+                        self.__output.print("* " + entry.pattern.message.replace("{0}", match_word))
+                    self.__output.print()
             total_count += count
         return bool(total_count)
 
     def output_summary(self):
-        self.__print("# Summary", "cyan")
-        self.__print()
-        self.__to_tty or self.__print("```")
+        self.__output.print("# Summary", "cyan")
+        self.__output.print()
+        self.__output.isatty() or self.__output.print("```")
 
         total_file_count = sum(self.__file_count_by_extension.values())
-        self.__print("  * File ({0}):".format(total_file_count))
+        self.__output.print("  * File ({0}):".format(total_file_count))
         for ext in sorted(self.__file_count_by_extension):
-            self.__print("    * {0:10} - {1:4} files".format(ext[1:], self.__file_count_by_extension[ext]))
+            self.__output.print("    * {0:10} - {1:4} files".format(ext[1:], self.__file_count_by_extension[ext]))
 
         total_block_count = self.added_block_count + self.deleted_block_count + self.replaced_block_count
-        self.__print("  * Diff block ({0}):".format(total_block_count))
-        self.__print("    * Add        - {0:4} blocks".format(self.added_block_count))
-        self.__print("    * Delete     - {0:4} blocks".format(self.deleted_block_count))
-        self.__print("    * Replace    - {0:4} blocks".format(self.replaced_block_count))
+        self.__output.print("  * Diff block ({0}):".format(total_block_count))
+        self.__output.print("    * Add        - {0:4} blocks".format(self.added_block_count))
+        self.__output.print("    * Delete     - {0:4} blocks".format(self.deleted_block_count))
+        self.__output.print("    * Replace    - {0:4} blocks".format(self.replaced_block_count))
 
         total_added = self.pure_added_line_count + self.replace_added_line_count
         total_deleted = self.pure_deleted_line_count + self.replace_deleted_line_count
         total_line_count = total_added + total_deleted + self.non_diff_line_count
-        self.__print("  * Line ({0}):".format(total_line_count))
-        self.__print("    * Add        - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
+        self.__output.print("  * Line ({0}):".format(total_line_count))
+        self.__output.print("    * Add        - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
             total_added,
             self.pure_added_line_count,
             self.replace_added_line_count))
-        self.__print("    * Delete     - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
+        self.__output.print("    * Delete     - {0:4} lines (Pure:{1:4} Replace:{2:4})".format(
             total_deleted,
             self.pure_deleted_line_count,
             self.replace_deleted_line_count))
         if 0 < self.non_diff_line_count:
-            self.__print("    * -          - {0:4} lines".format(self.non_diff_line_count))
+            self.__output.print("    * -          - {0:4} lines".format(self.non_diff_line_count))
 
-        self.__to_tty or self.__print("```")
-        self.__print()
+        self.__output.isatty() or self.__output.print("```")
+        self.__output.print()
         return True
 
     def output_counts(self):
-        self.__print("# Counts", "cyan")
-        self.__print()
-        self.__to_tty or self.__print("```")
+        self.__output.print("# Counts", "cyan")
+        self.__output.print()
+        self.__output.isatty() or self.__output.print("```")
         max_width = strlen_on_screen(max(self.__keyword_count_by_category, key = lambda k : len(k)))
         max_count = max(self.__keyword_count_by_category.values())
         bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
         for category in self.__keyword_count_by_category:
             count = self.__keyword_count_by_category[category]
-            self.__print("  * {0}{1} - {2:4} {3}".format(
+            self.__output.print("  * {0}{1} - {2:4} {3}".format(
                 category, " " * (max_width - strlen_on_screen(category)),
                 count,
                 "#" * math.ceil(count * bar_scale)))
-        self.__to_tty or self.__print("```")
-        self.__print()
+        self.__output.isatty() or self.__output.print("```")
+        self.__output.print()
 
     def output_funccalls(self):
-        self.__print("# Function calls", "cyan")
-        self.__print()
-        self.__to_tty or self.__print("```")
+        self.__output.print("# Function calls", "cyan")
+        self.__output.print()
+        self.__output.isatty() or self.__output.print("```")
         sorted_list = list(self.__funccall_count_by_name.items())
         sorted_list.sort(key = itemgetter(0), reverse = False)
         sorted_list.sort(key = itemgetter(1), reverse = True)
@@ -333,27 +347,27 @@ class Report(object):
             max_count = max(sorted_list, key = lambda t: t[1])[1]
             bar_scale = 1 / max(1, math.ceil(max_count / self.__bar_max))
             for name, count in sorted_list:
-                self.__print("  * {0}{1} - {2:4} {3}".format(
+                self.__output.print("  * {0}{1} - {2:4} {3}".format(
                     name, " " * (max_width - strlen_on_screen(name)),
                     count,
                     "#" * math.ceil(count * bar_scale)))
-        self.__to_tty or self.__print("```")
-        self.__print()
+        self.__output.isatty() or self.__output.print("```")
+        self.__output.print()
         return bool(len(sorted_list))
 
     def output_warnings(self):
-        self.__print("# Warnings", "cyan")
-        self.__print()
-        self.__to_tty or self.__print("```")
+        self.__output.print("# Warnings", "cyan")
+        self.__output.print()
+        self.__output.isatty() or self.__output.print("```")
         max_width = strlen_on_screen(max(self.__entries_by_category, key = lambda k : len(k)))
         for category in self.__entries_by_category:
             entries = self.__entries_by_category[category]
             count = len(entries)
-            self.__print(
+            self.__output.print(
                 "  * {0}{1} - {2:3} {3}".format(category, " " * (max_width - strlen_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
-        self.__to_tty or self.__print("```")
-        self.__print()
+        self.__output.isatty() or self.__output.print("```")
+        self.__output.print()
         return True
 
     def write_log(self, log_dir):
@@ -380,37 +394,18 @@ class Report(object):
                 os.getcwd(),
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
-    def __print(self, string = "", style = "", newline = True):
-        if self.__to_tty:
-            bold = style.startswith("*")
-            color = style[1:] if bold else style
-            if color == "red":
-                s = concolor.red(string, bold)
-            elif color == "green":
-                s = concolor.green(string, bold)
-            elif color == "cyan":
-                s = concolor.cyan(string, bold)
-            else:
-                s = concolor.default(string, bold)
-        else:
-            s = string
-        print(s, end = "\n" if newline else "")
-
-    def __print_separator(self, length = 60):
-        self.__print("-" * length)
-
 class Entry(object):
     pass
 
-def print_banner():
-    print()
-    print(" #####    ####   #    #    ##    #        #   #    #  #####")
-    print(" #    #  #    #  #   #    #  #   #        #   ##   #    #  ")
-    print(" #    #  #    #  ####    #    #  #        #   # #  #    #  ")
-    print(" #####   #    #  #  #    ######  #        #   #  # #    #  ")
-    print(" #       #    #  #   #   #    #  #        #   #   ##    #  ")
-    print(" #        ####   #    #  #    #  ######   #   #    #    #  ")
-    print()
+def print_banner(output):
+    output.print()
+    output.print(" #####    ####   #    #    ##    #        #   #    #  #####", "cyan")
+    output.print(" #    #  #    #  #   #    #  #   #        #   ##   #    #  ", "cyan")
+    output.print(" #    #  #    #  ####    #    #  #        #   # #  #    #  ", "cyan")
+    output.print(" #####   #    #  #  #    ######  #        #   #  # #    #  ", "cyan")
+    output.print(" #       #    #  #   #   #    #  #        #   #   ##    #  ", "cyan")
+    output.print(" #        ####   #    #  #    #  ######   #   #    #    #  ", "cyan")
+    output.print()
 
 def travarse_files(paths, recursive, handler):
     for path in paths:
@@ -423,7 +418,9 @@ def travarse_files(paths, recursive, handler):
                 travarse_files(glob.glob(os.path.join(path, "*")), recursive, handler)
 
 def main(argv, stdin = None):
-    to_tty = sys.stdout.isatty()
+    app_dir = os.path.dirname(__file__)
+    output = Output(sys.stdout)
+    error_output = Output(sys.stderr)
 
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("-r", "--recursive", dest="recursive", action="store_true", required=False, default=False)
@@ -432,21 +429,14 @@ def main(argv, stdin = None):
     ap.add_argument("files", metavar="FILE", nargs="*")
     args = ap.parse_args(args=argv[1:])
 
-    if to_tty:
-        print_banner()
+    if output.isatty():
+        print_banner(output)
 
-    app_dir = os.path.dirname(__file__)
-    setting_file = os.path.join(app_dir, "pokalint_setting.json")
     try:
-        setting = Setting(setting_file)
-    except:
-        print(sys.exc_info(), file=sys.stderr)
-        return
-
-    inspector = Inspector(setting)
-    try:
+        setting = Setting(os.path.join(app_dir, "pokalint_setting.json"))
+        inspector = Inspector(setting)
         if stdin:
-            inspector.inspect_diff(lines=stdin)
+            inspector.inspect_diff(stdin)
         else:
             def handler(path):
                 abspath = os.path.abspath(path)
@@ -454,19 +444,14 @@ def main(argv, stdin = None):
                     try:
                         inspector.inspect_file(abspath)
                         if args.verbose:
-                            print(abspath, file=sys.stderr)
+                            error_output.print(abspath)
                     except:
-                        error = "{0} - ERROR: {1}".format(abspath, sys.exc_info()[1])
-                        if to_tty:
-                            error = concolor.red(error)
-                        print(error, file=sys.stderr)
+                        error_output.print("{0} - ERROR: {1}".format(abspath, sys.exc_info()[1]), "red")
             travarse_files(args.files, args.recursive, handler)
-            if args.verbose:
-                print()
+        inspector.report.output(output)
     except:
-        print(sys.exc_info(), file=sys.stderr)
+        error_output.print("ERROR: {0}".format(sys.exc_info()[1]), "red")
         return
-    inspector.report.output(to_tty)
 
     log_dir = os.path.join(app_dir, "log")
     if os.path.isdir(log_dir):

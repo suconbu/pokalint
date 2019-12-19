@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
 
-def __get_func(code):
-    def func(text, bold=False):
-        return "\033[{0}{1}m{2}\033[0m".format(
-            "1;" if bold else "",
-            code,
-            text)
-    return func
-
-red = __get_func(31)
-green = __get_func(32)
-yellow = __get_func(33)
-blue = __get_func(34)
-magenta = __get_func(35)
-cyan = __get_func(36)
-white = __get_func(37)
-default = __get_func(39)
+def get(text, color, bold=False):
+    code = {"red":31, "green":32, "yellow":33, "blue":34, "magenta":35, "cyan":36, "white":37, "default":39}.get(color, 39)
+    return "\033[{0}{1}m{2}\033[0m".format("1;" if bold else "", code, text)

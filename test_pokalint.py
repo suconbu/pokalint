@@ -31,7 +31,7 @@ def test_inspector(capfd):
     assert(r.replace_added_line_count == 1)
     assert(r.pure_deleted_line_count == 3)
     assert(r.replace_deleted_line_count == 1)
-    r.output(False)
+    r.output(Output(sys.stdout))
     o, e = capfd.readouterr()
     verify_output(o, e, [4, 2, 3])
 
