@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 
-from pokalint import *
+import pokalint
 import re
 import pdb
 
 def test_pattern():
-    p = Pattern("hoge")
+    p = pokalint.Pattern("hoge")
     assert(p)
     assert(p.match("This is hoge."))
-    p = Pattern("/\\bhoge\\b/")
+    p = pokalint.Pattern("/\\bhoge\\b/")
     assert(p.match("This is hoge."))
     assert(not p.match("This is hogeee."))
-    p = Pattern("/\\bhoge\\b/i")
+    p = pokalint.Pattern("/\\bhoge\\b/i")
     assert(p.match("This is hoge."))
     assert(p.match("This is Hoge."))
     assert(p.match("This is HOGE."))
 
 def test_inspector(capfd):
-    setting = Setting("./pokalint_setting.json")
-    i = Inspector(setting)
+    setting = pokalint.Setting("./pokalint_setting.json")
+    i = pokalint.Inspector(setting)
     assert(i)
     with open("test/diff_git.txt") as f:
         i.inspect_diff(f.readlines())
@@ -31,56 +31,57 @@ def test_inspector(capfd):
     assert(r.replace_added_line_count == 1)
     assert(r.pure_deleted_line_count == 3)
     assert(r.replace_deleted_line_count == 1)
-    r.output(Output(sys.stdout))
+    r.output(pokalint.Output(pokalint.sys.stdout))
     o, e = capfd.readouterr()
     verify_output(o, e, [4, 2, 3])
 
 def test_main_stdin1(capfd):
     with open("test/diff_git.txt", mode="r", encoding="utf-8") as f:
         lines = f.readlines()
-    main(["pokalint.py"], lines)
+    pokalint.main(["pokalint.py"], lines)
     o, e = capfd.readouterr()
     verify_output(o, e, [4, 2, 3])
 
 def test_main_stdin2(capfd):
     with open("test/helloworld.c", mode="r", encoding="utf-8") as f:
         lines = f.readlines()
-    main(["pokalint.py"], lines)
+    pokalint.main(["pokalint.py"], lines)
     o, e = capfd.readouterr()
+    assert(not o)
     assert("Invalid diff format" in e)
 
 def test_main_args1(capfd):
-    main(["pokalint.py", "test/helloworld.c"])
+    pokalint.main(["pokalint.py", "test/helloworld.c"])
     o, e = capfd.readouterr()
     verify_output(o, e, [2, 2, 2])
 
 def test_main_args2(capfd):
-    main(["pokalint.py", "test/helloworld.cpp"])
+    pokalint.main(["pokalint.py", "test/helloworld.cpp"])
     o, e = capfd.readouterr()
     verify_output(o, e, [2, 2, 3])
 
 def test_main_args3(capfd):
-    main(["pokalint.py", "test/*"])
+    pokalint.main(["pokalint.py", "test/*"])
     o, e = capfd.readouterr()
     verify_output(o, e, [10, 9, 11])
 
 def test_main_args4(capfd):
-    main(["pokalint.py", "test/*", "-v"])
+    pokalint.main(["pokalint.py", "test/*", "-v"])
     o, e = capfd.readouterr()
     verify_output(o, e, [10, 9, 11])
 
 def test_main_args5(capfd):
-    main(["pokalint.py", "test/notfound.c"])
+    pokalint.main(["pokalint.py", "test/notfound.c"])
     o, e = capfd.readouterr()
     verify_output(o, e, [0, 0, 0], notfound=True)
 
 def test_main_args6(capfd):
-    main(["pokalint.py", "*"])
+    pokalint.main(["pokalint.py", "*"])
     o, e = capfd.readouterr()
     verify_output(o, e, [0, 0, 0])
 
 def test_main_args7(capfd):
-    main(["pokalint.py", "*", "-r"])
+    pokalint.main(["pokalint.py", "*", "-r"])
     o, e = capfd.readouterr()
     verify_output(o, e, [10, 9, 11])
 
