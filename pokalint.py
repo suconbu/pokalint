@@ -124,6 +124,11 @@ class Inspector(object):
         self.__report = Report(self.__setting)
         self.__funccall_re = re.compile(r"([_A-Za-z][_0-9A-Za-z]*)\s*\(")
         self.__keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
+        funcdef_pattern = r"^\s*(?:const\s+)?[A-Za-z_]\w*\s*(?:\**|\s)\s*(?:const)?\s*(?:\**|\s)\s*\b([A-Za-z_]\w*)\s*\("
+        self.__funcdecls = set()
+        self.__funcdecl_re = re.compile(funcdef_pattern + r".*\)\s*(?:const)?\s*;$")
+        self.__funcdefs = set()
+        self.__funcdef_re = re.compile(funcdef_pattern)
 
     @property
     def report(self):
@@ -208,11 +213,19 @@ class Inspector(object):
         if counter_match:
             self.__report.increase_keyword_count(counter_match["name"])
 
-        matches = self.__funccall_re.findall(line)
-        if matches:
-            for match in matches:
-                if not match in self.__keywords:
-                    self.__report.increase_funccall_count(match)
+        funcdecl_match = self.__funcdecl_re.match(line)
+        if funcdecl_match and funcdecl_match.group(1) not in self.__keywords:
+            self.__funcdecls.add(funcdecl_match.group(1))
+        else:
+            funcdef_match = self.__funcdef_re.match(line)
+            if funcdef_match and funcdef_match.group(1) not in self.__keywords:
+                self.__funcdefs.add(funcdef_match.group(1))
+            else:
+                matches = self.__funccall_re.findall(line)
+                if matches:
+                    for match in matches:
+                        if match not in self.__keywords:
+                            self.__report.increase_funccall_count(match)
 
 class Report(object):
     def __init__(self, setting):
