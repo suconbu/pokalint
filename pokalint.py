@@ -53,11 +53,19 @@ class Pattern(object):
             flags = 0
             if match.group(2) and "i" in match.group(2):
                 flags |= re.I
-            self.__pattern = re.compile(match.group(1), flags)
-            self.__regex = True
+            re_pattern = re.compile(match.group(1), flags)
+            def regex_matcher(s, full):
+                m = re_pattern.match(s) if full else re_pattern.search(s)
+                return (m.start(0), m.end(0)) if m else None
+            self.__matcher = regex_matcher
         else:
-            self.__pattern = pattern_string
-            self.__regex = False
+            def simple_matcher(s, full):
+                if full:
+                    return (0, len(s)) if pattern_string == s else None
+                else:
+                    index = s.find(pattern_string)
+                    return (index, index + len(pattern_string)) if 0 <= index else None
+            self.__matcher = simple_matcher
         self.__message = message
         self.__filters = filters
 
@@ -65,16 +73,11 @@ class Pattern(object):
     def message(self):
         return self.__message
 
-    def match(self, s, t=None):
+    def match(self, s, t=None, full=False):
         if not self.__filters or (t in self.__filters):
-            if self.__regex:
-                match = self.__pattern.search(s)
-                if match:
-                    return {"pattern":self, "start":match.start(0), "end":match.end(0)}
-            else:
-                index = s.find(self.__pattern)
-                if 0 <= index:
-                    return {"pattern":self, "start":index, "end":index + len(self.__pattern)}
+            result = self.__matcher(s, full)
+            if result:
+                return {"pattern":self, "start":result[0], "end":result[1]}
         return None
 
 class PatternSet(object):
@@ -84,9 +87,9 @@ class PatternSet(object):
         for pattern in patterns:
             self.__patterns.append(Pattern(pattern))
 
-    def match(self, s, t=None):
+    def match(self, s, t=None, full=False):
         for pattern in self.__patterns:
-            match = pattern.match(s, t)
+            match = pattern.match(s, t, full)
             if match:
                 match["name"] = self.__name
                 return match
@@ -101,9 +104,9 @@ class PatternGroup:
     def names(self):
         return self.__patternsets.keys()
 
-    def match(self, s, t = None):
+    def match(self, s, t = None, full=False):
         for name in self.__patternsets:
-            match = self.__patternsets[name].match(s, t)
+            match = self.__patternsets[name].match(s, t, full)
             if match:
                 return match
         return None
@@ -114,6 +117,7 @@ class Setting(object):
         self.filter = PatternGroup(root["filter"])
         self.counter = PatternGroup(root["counter"])
         self.warning = PatternGroup(root["warning"])
+        self.exclude_keyword = PatternSet("exclude-keyword", root["exclude-keyword"])
 
 class Inspector(object):
     def __init__(self, setting):
@@ -123,7 +127,6 @@ class Inspector(object):
         self.__current_lineno = 0
         self.__report = Report(self.__setting)
         self.__funccall_re = re.compile(r"([_A-Za-z][_0-9A-Za-z]*)\s*\(")
-        self.__keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
         funcdef_pattern = r"^\s*(?:const\s+)?[A-Za-z_]\w*\s*(?:\**|\s)\s*(?:const)?\s*(?:\**|\s)\s*\b([A-Za-z_]\w*)\s*\("
         self.__funcdecl_re = re.compile(funcdef_pattern + r".*\)\s*(?:const)?\s*;$")
         self.__funcdef_re = re.compile(funcdef_pattern)
@@ -212,17 +215,17 @@ class Inspector(object):
             self.__report.increase_keyword_count(counter_match["name"])
 
         funcdecl_match = self.__funcdecl_re.match(line)
-        if funcdecl_match and funcdecl_match.group(1) not in self.__keywords:
+        if funcdecl_match and not self.__setting.exclude_keyword.match(funcdecl_match.group(1), full=True):
             self.__report.add_funcdecl(funcdecl_match.group(1))
         else:
             funcdef_match = self.__funcdef_re.match(line)
-            if funcdef_match and funcdef_match.group(1) not in self.__keywords:
+            if funcdef_match and not self.__setting.exclude_keyword.match(funcdef_match.group(1), full=True):
                 self.__report.add_funcdef(funcdef_match.group(1))
             else:
                 matches = self.__funccall_re.findall(line)
                 if matches:
                     for match in matches:
-                        if match not in self.__keywords:
+                        if not self.__setting.exclude_keyword.match(match, full=True):
                             self.__report.increase_funccall_count(match)
 
 class Report(object):
@@ -428,12 +431,12 @@ class Entry(object):
 
 def print_banner(output):
     output.print()
-    output.print(" #####    ####   #    #    ##    #        #   #    #  #####", "cyan")
-    output.print(" #    #  #    #  #   #    #  #   #        #   ##   #    #  ", "cyan")
-    output.print(" #    #  #    #  ####    #    #  #        #   # #  #    #  ", "cyan")
-    output.print(" #####   #    #  #  #    ######  #        #   #  # #    #  ", "cyan")
-    output.print(" #       #    #  #   #   #    #  #        #   #   ##    #  ", "cyan")
-    output.print(" #        ####   #    #  #    #  ######   #   #    #    #  ", "cyan")
+    output.print(" #####    ####   #    #    ##    #        #   #    #  #####")
+    output.print(" #    #  #    #  #   #    #  #   #        #   ##   #    #  ")
+    output.print(" #    #  #    #  ####    #    #  #        #   # #  #    #  ")
+    output.print(" #####   #    #  #  #    ######  #        #   #  # #    #  ")
+    output.print(" #       #    #  #   #   #    #  #        #   #   ##    #  ")
+    output.print(" #        ####   #    #  #    #  ######   #   #    #    #  ")
     output.print()
 
 def travarse_files(paths, recursive, handler):
