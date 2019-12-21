@@ -125,9 +125,7 @@ class Inspector(object):
         self.__funccall_re = re.compile(r"([_A-Za-z][_0-9A-Za-z]*)\s*\(")
         self.__keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
         funcdef_pattern = r"^\s*(?:const\s+)?[A-Za-z_]\w*\s*(?:\**|\s)\s*(?:const)?\s*(?:\**|\s)\s*\b([A-Za-z_]\w*)\s*\("
-        self.__funcdecls = set()
         self.__funcdecl_re = re.compile(funcdef_pattern + r".*\)\s*(?:const)?\s*;$")
-        self.__funcdefs = set()
         self.__funcdef_re = re.compile(funcdef_pattern)
 
     @property
@@ -215,11 +213,11 @@ class Inspector(object):
 
         funcdecl_match = self.__funcdecl_re.match(line)
         if funcdecl_match and funcdecl_match.group(1) not in self.__keywords:
-            self.__funcdecls.add(funcdecl_match.group(1))
+            self.__report.add_funcdecl(funcdecl_match.group(1))
         else:
             funcdef_match = self.__funcdef_re.match(line)
             if funcdef_match and funcdef_match.group(1) not in self.__keywords:
-                self.__funcdefs.add(funcdef_match.group(1))
+                self.__report.add_funcdef(funcdef_match.group(1))
             else:
                 matches = self.__funccall_re.findall(line)
                 if matches:
@@ -241,6 +239,8 @@ class Report(object):
         self.__keyword_count_by_category = OrderedDict.fromkeys(setting.counter.names(), 0)
         self.__entries_by_category = OrderedDict((n, []) for n in setting.warning.names())
         self.__funccall_count_by_name = {}
+        self.__funcdecls = set()
+        self.__funcdefs = set()
         self.__bar_max = 80
         self.__output = None
 
@@ -252,6 +252,12 @@ class Report(object):
 
     def increase_funccall_count(self, name):
         self.__funccall_count_by_name[name] = self.__funccall_count_by_name.setdefault(name, 0) + 1
+
+    def add_funcdecl(self, name):
+        self.__funcdecls.add(name)
+
+    def add_funcdef(self, name):
+        self.__funcdefs.add(name)
 
     def add_entry(self, cateogry, entry):
         self.__entries_by_category[cateogry].append(entry)
@@ -266,6 +272,7 @@ class Report(object):
             self.__output.print()
         self.output_summary()
         self.output_counts()
+        self.output_funcdefs()
         self.output_funccalls()
         self.output_warnings()
 
@@ -344,6 +351,15 @@ class Report(object):
                 category, " " * (max_width - strlen_on_screen(category)),
                 count,
                 "#" * math.ceil(count * bar_scale)))
+        self.__output.isatty() or self.__output.print("```")
+        self.__output.print()
+
+    def output_funcdefs(self):
+        self.__output.print("# Defined functions", "cyan")
+        self.__output.print()
+        self.__output.isatty() or self.__output.print("```")
+        for name in sorted(self.__funcdefs):
+            self.__output.print("  * {0}".format(name))
         self.__output.isatty() or self.__output.print("```")
         self.__output.print()
 
