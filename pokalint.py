@@ -39,46 +39,42 @@ class Output(object):
 class Pattern(object):
     def __init__(self, pattern):
         if type(pattern) is str:
-            pattern_string = pattern
-            message = None
-            filters = None
+            self.__matcher = self.__get_matcher(pattern)
+            self.__message = None
+            self.__filetypes = None
         else:
-            pattern_string = pattern.get("pattern")
-            message = pattern.get("message")
-            filters = pattern.get("only")
-
-        match = re.match(r"/(.*)/(\w)?", pattern_string)
-
-        if match:
-            flags = 0
-            if match.group(2) and "i" in match.group(2):
-                flags |= re.I
-            re_pattern = re.compile(match.group(1), flags)
-            def regex_matcher(s, full):
-                m = re_pattern.match(s) if full else re_pattern.search(s)
-                return (m.start(0), m.end(0)) if m else None
-            self.__matcher = regex_matcher
-        else:
-            def simple_matcher(s, full):
-                if full:
-                    return (0, len(s)) if pattern_string == s else None
-                else:
-                    index = s.find(pattern_string)
-                    return (index, index + len(pattern_string)) if 0 <= index else None
-            self.__matcher = simple_matcher
-        self.__message = message
-        self.__filters = filters
+            self.__matcher = self.__get_matcher(pattern.get("pattern"))
+            self.__message = pattern.get("message")
+            self.__filetypes = pattern.get("only")
 
     @property
     def message(self):
         return self.__message
 
-    def match(self, s, t=None, full=False):
-        if not self.__filters or (t in self.__filters):
-            result = self.__matcher(s, full)
+    def match(self, s, filetype=None, fullmatch=False):
+        if not self.__filetypes or (filetype in self.__filetypes):
+            result = self.__matcher(s, fullmatch)
             if result:
                 return {"pattern":self, "start":result[0], "end":result[1]}
         return None
+    
+    def __get_matcher(self, s):
+        flags = 0
+        match = re.match(r"/(.+)/(\w*)", s)
+        if match:
+            # Regex pattern
+            pattern_string = match.group(1)
+            flags_match = match.group(2)
+            if flags_match and "i" in flags_match:
+                flags |= re.I
+        else:
+            # Non regex pattern
+            pattern_string = re.escape(s)
+        pattern = re.compile(pattern_string, flags)
+        def regex_matcher(s, fullmatch):
+            m = pattern.fullmatch(s) if fullmatch else pattern.search(s)
+            return (m.start(0), m.end(0)) if m else None
+        return regex_matcher
 
 class PatternSet(object):
     def __init__(self, name, patterns):
@@ -87,9 +83,9 @@ class PatternSet(object):
         for pattern in patterns:
             self.__patterns.append(Pattern(pattern))
 
-    def match(self, s, t=None, full=False):
+    def match(self, s, filetype=None, fullmatch=False):
         for pattern in self.__patterns:
-            match = pattern.match(s, t, full)
+            match = pattern.match(s, filetype, fullmatch)
             if match:
                 match["name"] = self.__name
                 return match
@@ -104,9 +100,9 @@ class PatternGroup:
     def names(self):
         return self.__patternsets.keys()
 
-    def match(self, s, t = None, full=False):
+    def match(self, s, filetype=None, fullmatch=False):
         for name in self.__patternsets:
-            match = self.__patternsets[name].match(s, t, full)
+            match = self.__patternsets[name].match(s, filetype, fullmatch)
             if match:
                 return match
         return None
@@ -114,10 +110,17 @@ class PatternGroup:
 class Setting(object):
     def __init__(self, setting_path):
         root = json.load(open(setting_path), object_pairs_hook = OrderedDict)
-        self.filter = PatternGroup(root["filter"])
+        self.filter = PatternGroup(root["filetype"])
         self.counter = PatternGroup(root["counter"])
         self.warning = PatternGroup(root["warning"])
-        self.exclude_keyword = PatternSet("exclude-keyword", root["exclude-keyword"])
+        self.funcinfo_available = False
+        language_setting = root["language-setting"]
+        if language_setting:
+            self.funcdecl_re = re.compile(language_setting["function-declaration"][1:-1])
+            self.funcdef_re = re.compile(language_setting["function-definition"][1:-1])
+            self.funccall_re = re.compile(language_setting["function-call"][1:-1])
+            self.funcname_exclude_set = PatternSet(None, language_setting["function-exclude"])
+            self.funcinfo_available = True
 
 class Inspector(object):
     def __init__(self, setting):
@@ -126,10 +129,6 @@ class Inspector(object):
         self.__current_filetype = None
         self.__current_lineno = 0
         self.__report = Report(self.__setting)
-        self.__funccall_re = re.compile(r"([_A-Za-z][_0-9A-Za-z]*)\s*\(")
-        funcdef_pattern = r"^\s*(?:const\s+)?[A-Za-z_]\w*\s*(?:\**|\s)\s*(?:const)?\s*(?:\**|\s)\s*\b([A-Za-z_]\w*)\s*\("
-        self.__funcdecl_re = re.compile(funcdef_pattern + r".*\)\s*(?:const)?\s*;$")
-        self.__funcdef_re = re.compile(funcdef_pattern)
 
     @property
     def report(self):
@@ -214,18 +213,22 @@ class Inspector(object):
         if counter_match:
             self.__report.increase_keyword_count(counter_match["name"])
 
-        funcdecl_match = self.__funcdecl_re.match(line)
-        if funcdecl_match and not self.__setting.exclude_keyword.match(funcdecl_match.group(1), full=True):
-            self.__report.add_funcdecl(funcdecl_match.group(1))
+        if self.__setting.funcinfo_available:
+            self.__inspect_line_function(line)
+
+    def __inspect_line_function(self, line):
+        decl_match = self.__setting.funcdecl_re.search(line)
+        if decl_match and not self.__setting.funcname_exclude_set.match(decl_match.group(1), fullmatch=True):
+            self.__report.add_funcdecl(decl_match.group(1))
         else:
-            funcdef_match = self.__funcdef_re.match(line)
-            if funcdef_match and not self.__setting.exclude_keyword.match(funcdef_match.group(1), full=True):
-                self.__report.add_funcdef(funcdef_match.group(1))
+            def_match = self.__setting.funcdef_re.search(line)
+            if def_match and not self.__setting.funcname_exclude_set.match(def_match.group(1), fullmatch=True):
+                self.__report.add_funcdef(def_match.group(1))
             else:
-                matches = self.__funccall_re.findall(line)
+                matches = self.__setting.funccall_re.findall(line)
                 if matches:
                     for match in matches:
-                        if not self.__setting.exclude_keyword.match(match, full=True):
+                        if not self.__setting.funcname_exclude_set.match(match, fullmatch=True):
                             self.__report.increase_funccall_count(match)
 
 class Report(object):
@@ -246,6 +249,7 @@ class Report(object):
         self.__funcdefs = set()
         self.__bar_max = 80
         self.__output = None
+        self.__funcinfo_available = setting.funcinfo_available
 
     def increase_file_count(self, extension):
         self.__file_count_by_extension[extension] = self.__file_count_by_extension.setdefault(extension, 0) + 1
@@ -275,8 +279,9 @@ class Report(object):
             self.__output.print()
         self.output_summary()
         self.output_counts()
-        self.output_funcdefs()
-        self.output_funccalls()
+        if self.__funcinfo_available:
+            self.output_funcdefs()
+            self.output_funccalls()
         self.output_warnings()
 
     def output_warning_details(self):
