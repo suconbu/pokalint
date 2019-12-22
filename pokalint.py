@@ -80,6 +80,8 @@ class PatternSet(object):
     def __init__(self, name, patterns):
         self.__name = name
         self.__patterns = []
+        if type(patterns) is not list:
+            patterns = [patterns]
         for pattern in patterns:
             self.__patterns.append(Pattern(pattern))
 

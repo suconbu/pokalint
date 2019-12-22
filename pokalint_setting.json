@@ -1,7 +1,7 @@
 {
 	"filetype":{
-		"C":["/.+\\.(c|h)$/i"],
-		"C++":["/.+\\.(cpp|hpp|cxx|hxx|cp|hp|cc|hh|c\\+\\+|h\\+\\+)$/i"]
+		"C":"/.+\\.(c|h)$/i",
+		"C++":"/.+\\.(cpp|hpp|cxx|hxx|cp|hp|cc|hh|c\\+\\+|h\\+\\+)$/i"
 	},
 	"language-setting":{
 		"function-declaration":"/^\\s*(?:const\\s+)?[_A-Za-z][_0-9A-Za-z:]*\\s*(?:\\**|\\s)\\s*(?:const)?\\s*(?:\\**|\\s)\\s*\\b([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(.*\\)\\s*(?:const)?\\s*;$/",
@@ -27,21 +27,21 @@
 		]
 	},
 	"counter":{
-		"if":["/(?<!else )if\\b/"],
-		"switch":["/\\bswitch\\b/"],
-		"for/while":["/\\bfor|while\\b/"],
-		"break":["/\\bbreak\\b/"],
-		"continue":["/\\bcontinue\\b/"],
-		"goto":["/\\bgoto\\b/"],
-		"return":["/\\breturn\\b/"],
-		"#include":["/#include\\b/"],
-		"#define":["/#define\\b/"],
-		"enum":["/\\benum\\b/"],
-		"class":["/\\bclass\\b/"],
-		"struct":["/\\bstruct\\b/"],
-		"typedef":["/\\btypedef\\b/"],
-		"printf":["/\\w*printf\\w*/"],
-		"scanf":["/\\w*scanf\\w*/"],
+		"if":"/(?<!else )if\\b/",
+		"switch":"/\\bswitch\\b/",
+		"for/while":"/\\bfor|while\\b/",
+		"break":"/\\bbreak\\b/",
+		"continue":"/\\bcontinue\\b/",
+		"goto":"/\\bgoto\\b/",
+		"return":"/\\breturn\\b/",
+		"#include":"/#include\\b/",
+		"#define":"/#define\\b/",
+		"enum":"/\\benum\\b/",
+		"class":"/\\bclass\\b/",
+		"struct":"/\\bstruct\\b/",
+		"typedef":"/\\btypedef\\b/",
+		"printf":"/\\w*printf\\w*/",
+		"scanf":"/\\w*scanf\\w*/",
 		"malloc/new":["/\\b\\w*alloc\\b/i", "/\\bnew\\b/"],
 		"free/delete":["/\\b\\w*free\\b/i", "/\\bdelete\\b/"]
 	},
