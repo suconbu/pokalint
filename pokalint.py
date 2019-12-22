@@ -200,14 +200,14 @@ class Inspector(object):
     def __inspect_line(self, line):
         warning_match = self.__setting.warning.match(line, self.__current_filetype)
         if warning_match:
-            entry = Entry()
-            entry.filename = self.__current_filename
-            entry.lineno = self.__current_lineno
-            entry.start = warning_match["start"]
-            entry.end = warning_match["end"]
-            entry.text = line.replace("\t", " ")
-            entry.pattern = warning_match["pattern"]
-            self.__report.add_entry(warning_match["name"], entry)
+            warning = Warning()
+            warning.filename = self.__current_filename
+            warning.lineno = self.__current_lineno
+            warning.start = warning_match["start"]
+            warning.end = warning_match["end"]
+            warning.text = line.replace("\t", " ")
+            warning.pattern = warning_match["pattern"]
+            self.__report.add_warning(warning_match["name"], warning)
 
         counter_match = self.__setting.counter.match(line, self.__current_filetype)
         if counter_match:
@@ -243,7 +243,7 @@ class Report(object):
         self.replaced_block_count = 0
         self.__file_count_by_extension = {}
         self.__keyword_count_by_category = OrderedDict.fromkeys(setting.counter.names(), 0)
-        self.__entries_by_category = OrderedDict((n, []) for n in setting.warning.names())
+        self.__warnings_by_category = OrderedDict((n, []) for n in setting.warning.names())
         self.__funccall_count_by_name = {}
         self.__funcdecls = set()
         self.__funcdefs = set()
@@ -266,8 +266,8 @@ class Report(object):
     def add_funcdef(self, name):
         self.__funcdefs.add(name)
 
-    def add_entry(self, cateogry, entry):
-        self.__entries_by_category[cateogry].append(entry)
+    def add_warning(self, cateogry, warning):
+        self.__warnings_by_category[cateogry].append(warning)
 
     def output(self, output):
         self.__output = output
@@ -286,27 +286,27 @@ class Report(object):
 
     def output_warning_details(self):
         total_count = 0
-        for category in self.__entries_by_category:
-            entries = self.__entries_by_category[category]
-            count = len(entries)
+        for category in self.__warnings_by_category:
+            warnings = self.__warnings_by_category[category]
+            count = len(warnings)
             if 0 < count:
                 self.__output.print("# {0} ({1})".format(category, count), "cyan")
                 self.__output.print()
-                for entry in entries:
-                    self.__output.print("{0}:{1}  ".format(entry.filename, entry.lineno), "*")
+                for warning in warnings:
+                    self.__output.print("{0}:{1}  ".format(warning.filename, warning.lineno), "*")
 
                     self.__output.print("```")
-                    self.__output.print(entry.text[:entry.start], "", False)
-                    self.__output.print(entry.text[entry.start:entry.end], "*red", False)
-                    self.__output.print(entry.text[entry.end:])
+                    self.__output.print(warning.text[:warning.start], "", False)
+                    self.__output.print(warning.text[warning.start:warning.end], "*red", False)
+                    self.__output.print(warning.text[warning.end:])
 
-                    width_start = strlen_on_screen(entry.text[:entry.start])
-                    width_match = strlen_on_screen(entry.text[entry.start:entry.end])
+                    width_start = strlen_on_screen(warning.text[:warning.start])
+                    width_match = strlen_on_screen(warning.text[warning.start:warning.end])
                     self.__output.print(" " * width_start + "^" + "~" * (width_match - 1), "*red")
                     self.__output.print("```")
-                    if entry.pattern.message:
-                        match_word = entry.text[entry.start:entry.end]
-                        self.__output.print("* " + entry.pattern.message.replace("{0}", match_word))
+                    if warning.pattern.message:
+                        match_word = warning.text[warning.start:warning.end]
+                        self.__output.print("* " + warning.pattern.message.replace("{0}", match_word))
                     self.__output.print()
             total_count += count
         return bool(total_count)
@@ -396,10 +396,10 @@ class Report(object):
         self.__output.print("# Warnings", "cyan")
         self.__output.print()
         self.__output.isatty() or self.__output.print("```")
-        max_width = strlen_on_screen(max(self.__entries_by_category, key = lambda k : len(k)))
-        for category in self.__entries_by_category:
-            entries = self.__entries_by_category[category]
-            count = len(entries)
+        max_width = strlen_on_screen(max(self.__warnings_by_category, key = lambda k : len(k)))
+        for category in self.__warnings_by_category:
+            warnings = self.__warnings_by_category[category]
+            count = len(warnings)
             self.__output.print(
                 "  * {0}{1} - {2:3} {3}".format(category, " " * (max_width - strlen_on_screen(category)), count, "#" * count),
                 "green" if (count == 0) else "red")
@@ -417,21 +417,21 @@ class Report(object):
             summary["+"] = self.pure_added_line_count + self.replace_added_line_count
             summary["-"] = self.pure_deleted_line_count + self.replace_deleted_line_count
 
-            warnings = OrderedDict()
-            for category in self.__entries_by_category:
-                entries = self.__entries_by_category[category]
-                warnings[category] = len(entries)
+            warning_counts = OrderedDict()
+            for category in self.__warnings_by_category:
+                warnings = self.__warnings_by_category[category]
+                warning_counts[category] = len(warnings)
 
             data = OrderedDict()
             data["summary"] = summary
-            data["warnings"] = warnings
+            data["warnings"] = warning_counts
 
             f.write("{0};{1};{2};\n".format(
                 re.sub("[-:]", "", re.sub(r"\.\d*", "", now.isoformat())),
                 os.getcwd(),
                 json.dumps(data, separators=(',', ':'), ensure_ascii=False)))
 
-class Entry(object):
+class Warning(object):
     pass
 
 def print_banner(output):
