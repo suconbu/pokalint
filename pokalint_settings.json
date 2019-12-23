@@ -3,11 +3,11 @@
 		"C":"/.+\\.(c|h)$/i",
 		"C++":"/.+\\.(cpp|hpp|cxx|hxx|cp|hp|cc|hh|c\\+\\+|h\\+\\+)$/i"
 	},
-	"language-setting":{
-		"function-declaration":"/^\\s*(?:const\\s+)?[_A-Za-z][_0-9A-Za-z:]*\\s*(?:\\**|\\s)\\s*(?:const)?\\s*(?:\\**|\\s)\\s*\\b([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(.*\\)\\s*(?:const)?\\s*;$/",
-		"function-definition":"/^\\s*(?:const\\s+)?[_A-Za-z][_0-9A-Za-z:]*\\s*(?:\\**|\\s)\\s*(?:const)?\\s*(?:\\**|\\s)\\s*\\b([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(/",
-		"function-call":"/([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(/",
-		"function-exclude":[
+	"function-settings":{
+		"declaration":"/^\\s*(?:const\\s+)?[_A-Za-z][_0-9A-Za-z:]*\\s*(?:\\**|\\s)\\s*(?:const)?\\s*(?:\\**|\\s)\\s*\\b([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(.*\\)\\s*(?:const)?\\s*;$/",
+		"definition":"/^\\s*(?:const\\s+)?[_A-Za-z][_0-9A-Za-z:]*\\s*(?:\\**|\\s)\\s*(?:const)?\\s*(?:\\**|\\s)\\s*\\b([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(/",
+		"call":"/([_A-Za-z][_0-9A-Za-z:]*)\\s*\\(/",
+		"exclude":[
 			"alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel",
 			"atomic_commit", "atomic_noexcept", "auto", "bitand", "bitor",
 			"bool", "break", "case", "catch", "char", "char8_t", "char16_t",

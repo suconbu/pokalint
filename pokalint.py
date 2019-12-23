@@ -109,28 +109,28 @@ class PatternGroup:
                 return match
         return None
 
-class Setting(object):
-    def __init__(self, setting_path):
-        root = json.load(open(setting_path), object_pairs_hook = OrderedDict)
+class Settings(object):
+    def __init__(self, settings_path):
+        root = json.load(open(settings_path), object_pairs_hook = OrderedDict)
         self.filter = PatternGroup(root["filetype"])
         self.counter = PatternGroup(root["counter"])
         self.warning = PatternGroup(root["warning"])
         self.funcinfo_available = False
-        language_setting = root["language-setting"]
-        if language_setting:
-            self.funcdecl_re = re.compile(language_setting["function-declaration"][1:-1])
-            self.funcdef_re = re.compile(language_setting["function-definition"][1:-1])
-            self.funccall_re = re.compile(language_setting["function-call"][1:-1])
-            self.funcname_exclude_set = PatternSet(None, language_setting["function-exclude"])
+        function_settings = root["function-settings"]
+        if function_settings:
+            self.funcdecl_re = re.compile(function_settings["declaration"][1:-1])
+            self.funcdef_re = re.compile(function_settings["definition"][1:-1])
+            self.funccall_re = re.compile(function_settings["call"][1:-1])
+            self.funcname_exclude_set = PatternSet(None, function_settings["exclude"])
             self.funcinfo_available = True
 
 class Inspector(object):
-    def __init__(self, setting):
-        self.__setting = setting
+    def __init__(self, settings):
+        self.__settings = settings
         self.__current_filename = None
         self.__current_filetype = None
         self.__current_lineno = 0
-        self.__report = Report(self.__setting)
+        self.__report = Report(self.__settings)
 
     @property
     def report(self):
@@ -141,7 +141,7 @@ class Inspector(object):
             lines = f.readlines()
         self.__report.increase_file_count(os.path.splitext(path)[1])
         self.__current_filename = os.path.abspath(path)
-        match = self.__setting.filter.match(self.__current_filename)
+        match = self.__settings.filter.match(self.__current_filename)
         self.__current_filetype = match and match["name"]
         self.__current_lineno = 1
         for line in lines:
@@ -161,7 +161,7 @@ class Inspector(object):
                 pass
             elif line.startswith("+++"):
                 filename = filename_re.match(line).group(1)
-                if self.__setting.filter.match(filename):
+                if self.__settings.filter.match(filename):
                     self.__current_filename = filename_re.match(line).group(1)
                     self.__report.increase_file_count(os.path.splitext(filename)[1])
                 else:
@@ -200,7 +200,7 @@ class Inspector(object):
         return False
 
     def __inspect_line(self, line):
-        warning_match = self.__setting.warning.match(line, self.__current_filetype)
+        warning_match = self.__settings.warning.match(line, self.__current_filetype)
         if warning_match:
             warning = Warning()
             warning.filename = self.__current_filename
@@ -211,30 +211,30 @@ class Inspector(object):
             warning.pattern = warning_match["pattern"]
             self.__report.add_warning(warning_match["name"], warning)
 
-        counter_match = self.__setting.counter.match(line, self.__current_filetype)
+        counter_match = self.__settings.counter.match(line, self.__current_filetype)
         if counter_match:
             self.__report.increase_keyword_count(counter_match["name"])
 
-        if self.__setting.funcinfo_available:
+        if self.__settings.funcinfo_available:
             self.__inspect_line_function(line)
 
     def __inspect_line_function(self, line):
-        decl_match = self.__setting.funcdecl_re.search(line)
-        if decl_match and not self.__setting.funcname_exclude_set.match(decl_match.group(1), fullmatch=True):
+        decl_match = self.__settings.funcdecl_re.search(line)
+        if decl_match and not self.__settings.funcname_exclude_set.match(decl_match.group(1), fullmatch=True):
             self.__report.add_funcdecl(decl_match.group(1))
         else:
-            def_match = self.__setting.funcdef_re.search(line)
-            if def_match and not self.__setting.funcname_exclude_set.match(def_match.group(1), fullmatch=True):
+            def_match = self.__settings.funcdef_re.search(line)
+            if def_match and not self.__settings.funcname_exclude_set.match(def_match.group(1), fullmatch=True):
                 self.__report.add_funcdef(def_match.group(1))
             else:
-                matches = self.__setting.funccall_re.findall(line)
+                matches = self.__settings.funccall_re.findall(line)
                 if matches:
                     for match in matches:
-                        if not self.__setting.funcname_exclude_set.match(match, fullmatch=True):
+                        if not self.__settings.funcname_exclude_set.match(match, fullmatch=True):
                             self.__report.increase_funccall_count(match)
 
 class Report(object):
-    def __init__(self, setting):
+    def __init__(self, settings):
         self.non_diff_line_count = 0
         self.pure_added_line_count = 0
         self.pure_deleted_line_count = 0
@@ -244,14 +244,14 @@ class Report(object):
         self.deleted_block_count = 0
         self.replaced_block_count = 0
         self.__file_count_by_extension = {}
-        self.__keyword_count_by_category = OrderedDict.fromkeys(setting.counter.names(), 0)
-        self.__warnings_by_category = OrderedDict((n, []) for n in setting.warning.names())
+        self.__keyword_count_by_category = OrderedDict.fromkeys(settings.counter.names(), 0)
+        self.__warnings_by_category = OrderedDict((n, []) for n in settings.warning.names())
         self.__funccall_count_by_name = {}
         self.__funcdecls = set()
         self.__funcdefs = set()
         self.__bar_max = 80
         self.__output = None
-        self.__funcinfo_available = setting.funcinfo_available
+        self.__funcinfo_available = settings.funcinfo_available
 
     def increase_file_count(self, extension):
         self.__file_count_by_extension[extension] = self.__file_count_by_extension.setdefault(extension, 0) + 1
@@ -472,14 +472,14 @@ def main(argv, stdin = None):
         print_banner(output)
 
     try:
-        setting = Setting(os.path.join(app_dir, "pokalint_setting.json"))
-        inspector = Inspector(setting)
+        settings = Settings(os.path.join(app_dir, "pokalint_settings.json"))
+        inspector = Inspector(settings)
         if stdin:
             inspector.inspect_diff(stdin)
         else:
             def handler(path):
                 abspath = os.path.abspath(path)
-                if setting.filter.match(abspath):
+                if settings.filter.match(abspath):
                     try:
                         inspector.inspect_file(abspath)
                         if args.verbose:

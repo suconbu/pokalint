@@ -17,12 +17,12 @@ def test_pattern():
     assert(p.match("This is HOGE."))
 
 def test_inspector(capfd):
-    setting = pokalint.Setting("./pokalint_setting.json")
-    i = pokalint.Inspector(setting)
-    assert(i)
+    settings = pokalint.Settings("./pokalint_settings.json")
+    inspector = pokalint.Inspector(settings)
+    assert(inspector)
     with open("test/diff_git.txt") as f:
-        i.inspect_diff(f.readlines())
-    r = i.report
+        inspector.inspect_diff(f.readlines())
+    r = inspector.report
     assert(r is not None)
     assert(r.added_block_count == 9)
     assert(r.deleted_block_count == 2)
