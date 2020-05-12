@@ -84,7 +84,7 @@ index 07434bd..0c2054e 100644
  
 +  void APNGAsm::Hoge()
 +  {
-+    return;
++    int n[3] = {0};
 +  }
 +
    //Adds a frame from a file

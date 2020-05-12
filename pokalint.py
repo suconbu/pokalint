@@ -163,9 +163,12 @@ class Inspector(object):
                 filename = filename_re.match(line).group(1)
                 if self.__settings.filter.match(filename):
                     self.__current_filename = filename_re.match(line).group(1)
+                    match = self.__settings.filter.match(self.__current_filename)
+                    self.__current_filetype = match and match["name"]
                     self.__report.increase_file_count(os.path.splitext(filename)[1])
                 else:
                     self.__current_filename = None
+                    self.__current_filetype = None
             elif line.startswith("@@"):
                 add_count = 0
                 self.__current_lineno = int(lineno_re.match(line).group(1))

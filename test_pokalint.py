@@ -33,14 +33,14 @@ def test_inspector(capfd):
     assert(r.replace_deleted_line_count == 1)
     r.output(pokalint.Output(pokalint.sys.stdout))
     o, e = capfd.readouterr()
-    verify_output(o, e, [4, 2, 3])
+    verify_output(o, e, [4, 2, 4])
 
 def test_main_stdin1(capfd):
     with open("test/diff_git.txt", mode="r", encoding="utf-8") as f:
         lines = f.readlines()
     pokalint.main(["pokalint.py"], lines)
     o, e = capfd.readouterr()
-    verify_output(o, e, [4, 2, 3])
+    verify_output(o, e, [4, 2, 4])
 
 def test_main_stdin2(capfd):
     with open("test/helloworld.c", mode="r", encoding="utf-8") as f:
